@@ -259,3 +259,14 @@ Repeat for the Chrome extension frontend if it shares the generated types.
 ---
 
 Once all steps succeed and the smoke check in Step 10 returns `"status": "UP"` for all components, confirm to the PM that setup is complete.
+
+---
+
+## Setup Confirmation
+
+Once all steps above succeed (smoke check in Step 10 shows `"status": "UP"` for all components):
+
+1. Tell the PM agent: **"Setup is complete."**
+2. The PM agent will verify this confirmation before tagging `[INIT]` in `status.md`.
+
+**Do not confirm setup until Step 10 passes.** The PM will not proceed to `[INIT]` without this confirmation.
