@@ -24,7 +24,7 @@ Verify the following versions are installed before proceeding.
 
 If any version is missing or outdated, install the correct version before continuing. Use a version manager (e.g., `nvm` for Node, `sdk` for Java) if you need multiple versions on the same machine.
 
-> **Note (recorded 2026-05-30):** The development machine has Java 25 (non-LTS) and Docker Compose v5. Node 24 LTS and npm 11 are the current required versions and match the installed environment. Java 25 is a non-LTS release; see the Tech Lead Review in `status.md` (2026-05-30 — init-infra) for details on the Java version risk. You may proceed, but consider installing Java 21 LTS to match the stated requirement.
+> **Note (2026-05-30):** Java 21 LTS (21.0.8) confirmed active. Node 24 LTS and npm 11 are the current required versions and match the installed environment. Docker Compose v5 is compatible.
 
 ---
 
