@@ -1,0 +1,52 @@
+# Secrets — never commit
+.env
+*.env.local
+*.env.*.local
+
+# Java / Maven
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.logs
+.mvn/wrapper/maven-wrapper.jar
+hs_err_pid*
+
+# Node / npm
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+.vite/
+.cache/
+
+# Chrome Extension build output
+chrome-extension/dist/
+
+# PWA Dashboard build output
+pwa-dashboard/dist/
+
+# Uploads (user-generated content)
+uploads/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes
+postgres-data/
+redis-data/
+
+# Logs
+*.log
+logs/
