@@ -266,7 +266,8 @@ Once all steps succeed and the smoke check in Step 10 returns `"status": "UP"` f
 
 Once all steps above succeed (smoke check in Step 10 shows `"status": "UP"` for all components):
 
-1. Tell the PM agent: **"Setup is complete."**
-2. The PM agent will verify this confirmation before tagging `[INIT]` in `status.md`.
+1. Re-invoke the **Tech Lead agent** with the message: **"Setup is complete."**
+2. The Tech Lead will record confirmation in `status.md` and give you the green light to invoke the PM agent.
+3. Only after the Tech Lead records confirmation should you invoke PM to tag `[INIT]`.
 
-**Do not confirm setup until Step 10 passes.** The PM will not proceed to `[INIT]` without this confirmation.
+**Do not invoke the PM agent until the Tech Lead has recorded setup confirmation in `status.md`.**
