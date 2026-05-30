@@ -1,4 +1,4 @@
-**Revision**: 1 | **Last Updated**: 2026-05-30
+**Revision**: 2 | **Last Updated**: 2026-05-30
 
 ---
 
@@ -58,7 +58,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to save all open tabs in the current browser window at once,
 **so that** I can close the entire window quickly when I need to free memory without manually saving each tab.
 
-**Acceptance Criteria**: AC-005, AC-006, AC-050
+**Acceptance Criteria**: AC-005, AC-006, AC-050, AC-065
 
 ---
 
@@ -68,7 +68,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** saved links to be automatically summarized and assigned a suggested category,
 **so that** I can understand what a saved item is about at a glance without reopening the original URL.
 
-**Acceptance Criteria**: AC-007, AC-008, AC-009, AC-010
+**Acceptance Criteria**: AC-007, AC-008, AC-009, AC-010, AC-055, AC-056, AC-057
 
 ---
 
@@ -108,7 +108,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to manually create reminders on any saved item and manage (edit, snooze, dismiss) existing reminders,
 **so that** I am notified at the right time to act on time-sensitive saved content.
 
-**Acceptance Criteria**: AC-021, AC-022, AC-023, AC-024
+**Acceptance Criteria**: AC-021, AC-022, AC-023, AC-024, AC-060, AC-061, AC-062, AC-063
 
 ---
 
@@ -128,7 +128,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** YouTube video links I save to be automatically summarized using the video transcript,
 **so that** I can understand the video content without watching it in full.
 
-**Acceptance Criteria**: AC-028, AC-029, AC-030
+**Acceptance Criteria**: AC-028, AC-029, AC-030, AC-058, AC-059
 
 ---
 
@@ -148,7 +148,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to be reminded about saved items I have not visited in 30 days and to have them auto-archived if I do not act,
 **so that** my saved library stays manageable and does not accumulate forgotten, irrelevant items.
 
-**Acceptance Criteria**: AC-033, AC-034, AC-035, AC-036
+**Acceptance Criteria**: AC-033, AC-034, AC-035, AC-036, AC-066
 
 ---
 
@@ -178,7 +178,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to share a URL from any mobile app directly to TabVault via the system share sheet,
 **so that** I can save content on mobile without needing to open a desktop browser.
 
-**Acceptance Criteria**: AC-042, AC-043
+**Acceptance Criteria**: AC-042, AC-043, AC-064
 
 ---
 
@@ -188,7 +188,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to register an account and log in from both the extension and the PWA dashboard,
 **so that** my saved items are securely stored and accessible across devices under my account.
 
-**Acceptance Criteria**: AC-044, AC-045, AC-046, AC-047
+**Acceptance Criteria**: AC-044, AC-045, AC-046, AC-047, AC-052, AC-053, AC-054
 
 ---
 
@@ -227,20 +227,31 @@ TabVault is organized into three layers: client, backend, and data.
 
 **Client layer** comprises two frontend applications that share conventions but are deployed separately.
 
-The Chrome Extension (Manifest V3) provides the capture UI via a popup and a background service worker. The service worker manages auth token storage and refresh, sends save requests to the backend REST API, and processes alarm events to display in-browser reminder notifications. The extension does not perform content extraction — it sends the URL and page title to the backend and receives the analysis result.
+The Chrome Extension (Manifest V3) provides the capture UI via a popup and a background service worker. The service worker manages auth token storage and refresh; tokens are persisted in chrome.storage.local because MV3 service workers are ephemeral and cannot hold in-memory state reliably between invocations. The service worker sends save requests to the backend REST API and processes alarm events to display in-browser reminder notifications. The extension does not perform content extraction — it sends the URL and page title to the backend and receives the analysis result.
 
-The PWA dashboard is a single-page React application that serves as the primary management interface for browsing, searching, editing, and organizing saved items. It is installable as a PWA on desktop and mobile. A service worker caches the app shell and previously loaded data for offline access. The Share Target API allows the installed PWA to receive URLs shared from other mobile apps.
+The PWA dashboard is a single-page React application that serves as the primary management interface for browsing, searching, editing, and organizing saved items. It is installable as a PWA on desktop and mobile. A service worker caches the app shell and previously loaded data for offline access. The Share Target API allows the installed PWA to receive URLs shared from other mobile apps; URLs received while the device is offline are queued in the service worker and submitted to the backend when connectivity is restored, consistent with the offline note queue behavior.
 
 **Backend layer** is a single Spring Boot 3 application exposing a REST API consumed by both clients. It is organized into four internal service areas:
 
 - Auth Service: handles registration, login, JWT issuance, and token refresh.
-- Item Service: handles CRUD for items, categories, and tags. Orchestrates the content analysis pipeline by calling Content Extraction and then the LLM Service when a new item is saved. Updates `last_visited_at` on item click-through.
-- LLM Service: receives extracted text from the Item Service, checks the URL deduplication cache, calls the Claude API using the tool-use pattern, and returns structured analysis results (summary, category suggestion, detected deadlines) to the Item Service.
+- Item Service: handles CRUD for items, categories, and tags. Orchestrates the content analysis pipeline by writing a job record to the `content_analysis_jobs` outbox table on item save, so analysis jobs survive service restarts. Updates `last_visited_at` on item click-through.
+- LLM Service: reads pending jobs from the `content_analysis_jobs` table, checks the URL deduplication cache, calls the Claude API using the tool-use pattern, and returns structured analysis results (summary, category suggestion, detected deadlines) by updating the item record directly.
 - Reminder Scheduler: evaluates upcoming reminders and staleness conditions on a daily schedule, creates staleness reminder records, and dispatches push notifications for due reminders via the Web Push API.
 
-**Data layer**: PostgreSQL 16 is the primary store for all application data (users, items, categories, reminders, tags). Full-text search is served by PostgreSQL tsvector indexes on item titles, summaries, and note bodies. Redis 7.2 provides the URL deduplication cache, rate-limit counters, and optionally session storage; Redis is optional for MVP deployment and can be replaced by a PostgreSQL-backed cache table during initial development.
+**Data layer**: PostgreSQL 16 is the primary store for all application data (users, items, categories, reminders, tags). The `content_analysis_jobs` outbox table tracks pending and failed analysis jobs with status, retry count, and last-attempted timestamp. Full-text search is served by PostgreSQL tsvector columns on item titles, summaries, and note bodies; these columns are maintained by PostgreSQL trigger functions using the `english` language configuration, so the index is updated both on initial item save and when the LLM summary is written asynchronously. Redis 7.2 provides the URL deduplication cache, rate-limit counters, and optionally session storage; Redis is optional for MVP deployment and can be replaced by a PostgreSQL-backed cache table during initial development.
 
 **Type synchronization**: Java DTOs annotated with springdoc-openapi are the source-of-truth API contract. The backend auto-generates an OpenAPI spec at `/v3/api-docs`. The `openapi-typescript` tool generates TypeScript interfaces from that spec for use by both frontend applications.
+
+**Shared Conventions**:
+
+- All REST API error responses shall use a consistent JSON envelope: `{ "error": { "code": "ERROR_CODE", "message": "human-readable message", "field": "optional field name for validation errors" } }`.
+- All async analysis jobs shall be tracked in the `content_analysis_jobs` outbox table (PostgreSQL-backed) and never held in-memory only, so jobs survive service restarts.
+- Token estimation for LLM input truncation shall use the approximation: characters / 4 = estimated tokens. Truncation shall occur at the character level before sending to the API.
+- The tsvector columns for full-text search shall be maintained by PostgreSQL trigger functions using the `english` language configuration, applied on both initial item save and LLM summary write.
+- VAPID key pairs shall be injected as environment variables (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) and never hardcoded or committed to source.
+- Chrome Extension token storage shall use `chrome.storage.local` exclusively; tokens shall never be stored in memory only, given MV3 service worker lifecycle constraints.
+- The Quartz job store shall be configured as JDBC (PostgreSQL-backed) in all environments; the in-memory store shall not be used because it does not survive service restarts.
+- All modules shall follow feature-based directory structure: group files by module/feature, not by type (no top-level /controllers, /services, /repositories directories).
 
 ---
 
@@ -258,7 +269,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-002: Item Management
 
-**Purpose**: Manages CRUD operations for saved items (links, notes, videos), category management, tag management, pin and archive state, and the `last_visited_at` timestamp update on item click-through. Orchestrates calls to MOD-004 (content extraction) and MOD-003 (content analysis) after a new item is saved. Does not perform extraction or LLM calls directly.
+**Purpose**: Manages CRUD operations for saved items (links, notes, videos), category management, tag management, pin and archive state, and the `last_visited_at` timestamp update on item click-through. Orchestrates calls to MOD-004 (content extraction) and MOD-003 (content analysis) after a new item is saved by writing a job record to the `content_analysis_jobs` outbox table. Enforces per-user hourly rate limits on batch-save requests. Does not perform extraction or LLM calls directly.
 
 **User Stories**: US-001, US-002, US-005, US-006, US-008
 
@@ -268,17 +279,17 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-003: Content Analysis Pipeline
 
-**Purpose**: Receives extracted page text from MOD-002, calls the Claude API via the tool-use pattern to produce a summary, category suggestion, and deadline list, and returns structured results to MOD-002. Checks the URL deduplication cache before calling the API and writes results to the cache afterward. Invokes note categorization only when explicitly requested for a note longer than 50 words.
+**Purpose**: Reads pending job records from the `content_analysis_jobs` outbox table, calls the Claude API via the tool-use pattern to produce a summary, category suggestion, and deadline list, and writes structured results back to the item record. Checks the URL deduplication cache before calling the API and writes results to the cache afterward. Retries failed jobs up to the defined retry limit before marking them as permanently failed. Invokes note categorization only when explicitly requested for a note longer than 50 words.
 
 **User Stories**: US-003, US-004
 
-**Dependencies**: MOD-001 (Authentication — provides the user's existing category list for prompt context), MOD-002 (Item Management — provides the item record and extracted text; receives analysis results)
+**Dependencies**: MOD-001 (Authentication — provides the user's existing category list for prompt context), MOD-002 (Item Management — provides the item record and extracted text via the outbox table; receives analysis results written back to the item record)
 
 ---
 
 ### MOD-004: Content Extraction
 
-**Purpose**: Extracts readable text or metadata from a URL so that MOD-003 can analyze it. Handles article pages (HTML parsing and content extraction), YouTube video transcripts (YouTube Data API v3), PDF links (PDFBox text extraction), and Open Graph metadata for non-YouTube video platform URLs. Returns extracted text or metadata to MOD-002.
+**Purpose**: Extracts readable text or metadata from a URL so that MOD-003 can analyze it. Handles article pages (HTML parsing and content extraction), YouTube video transcripts (YouTube Data API v3), PDF links (PDFBox text extraction), and Open Graph metadata for non-YouTube video platform URLs. When a YouTube transcript is unavailable, stores the video title and thumbnail only and marks the summary as unavailable. Returns extracted text or metadata to MOD-002.
 
 **User Stories**: US-001, US-003, US-009, US-010
 
@@ -288,7 +299,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-005: Reminder Service
 
-**Purpose**: Manages reminder CRUD for both manual and auto-detected deadline reminders, evaluates upcoming reminders on a schedule, and dispatches push notifications to the user's registered push subscriptions when a reminder is due. Does not detect deadlines in content — that responsibility belongs to MOD-003.
+**Purpose**: Manages reminder CRUD for both manual and auto-detected deadline reminders, evaluates upcoming reminders on a schedule, and dispatches push notifications to the user's registered push subscriptions when a reminder is due. Manages the full push subscription lifecycle: client subscription registration, VAPID key configuration, stale endpoint cleanup (410 Gone), and multi-device subscription records per user. Does not detect deadlines in content — that responsibility belongs to MOD-003.
 
 **User Stories**: US-004, US-007
 
@@ -298,7 +309,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-006: Auto-Cleanup Scheduler
 
-**Purpose**: Runs daily scheduled jobs to identify non-pinned items not visited within the user's configured staleness threshold, creates staleness reminder records via MOD-005, and auto-archives items that pass the grace period without user interaction. Respects per-user opt-out and pin settings. Does not dispatch push notifications directly.
+**Purpose**: Runs daily scheduled jobs to identify non-pinned items not visited within the user's configured staleness threshold, creates staleness reminder records via MOD-005, and auto-archives items that pass the grace period without user interaction. Respects per-user opt-out and pin settings. Each daily job run is idempotent: if a staleness reminder for an item already exists and has not been acted on, the job shall not create a duplicate reminder for that item. Does not dispatch push notifications directly.
 
 **User Stories**: US-011, US-012
 
@@ -308,7 +319,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-007: Chrome Extension
 
-**Purpose**: Provides the browser capture UI (popup and background service worker) for saving tabs, saving all tabs, creating quick notes, viewing recent saves, and displaying in-browser reminder notifications. Manages auth token storage and refresh locally. Communicates with the backend REST API exclusively — does not access the database directly.
+**Purpose**: Provides the browser capture UI (popup and background service worker) for saving tabs, saving all tabs, creating quick notes, viewing recent saves, and displaying in-browser reminder notifications. Stores and refreshes auth tokens using `chrome.storage.local` exclusively; when a token refresh fails or the service worker wakes without a valid token, the popup displays a re-authentication prompt rather than silently failing. Communicates with the backend REST API exclusively — does not access the database directly.
 
 **User Stories**: US-001, US-002, US-007, US-008
 
@@ -318,7 +329,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 ### MOD-008: PWA Dashboard
 
-**Purpose**: Provides the management-layer web application where users browse, search, filter, edit, and organize saved items; manage categories; create and manage reminders; create plain text notes; and configure account settings including cleanup preferences. Implements PWA features: a service worker for offline caching of previously loaded data and the Share Target API for mobile URL sharing.
+**Purpose**: Provides the management-layer web application where users browse, search, filter, edit, and organize saved items; manage categories; create and manage reminders; create plain text notes; and configure account settings including cleanup preferences. Implements PWA features: a service worker for offline caching of previously loaded data and the Share Target API for mobile URL sharing. URLs received via Share Target while the device is offline are queued in the service worker and submitted to the backend when connectivity is restored.
 
 **User Stories**: US-005, US-006, US-007, US-008, US-011, US-012, US-013, US-014
 
@@ -400,6 +411,8 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 **AC-027**: The system shall return note items in search results when the search query matches text in the note body.
 
+**AC-065**: The system shall reject a batch save request with HTTP 429 when the requesting user has submitted more than 100 tab URLs to the batch-save endpoint within the current rolling 60-minute window.
+
 ---
 
 ### MOD-003 Acceptance Criteria
@@ -418,6 +431,12 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 **AC-013**: The system shall not activate a reminder created from a detected deadline until the user has explicitly confirmed, modified, or accepted it; a pending-confirmation reminder shall not trigger push notifications.
 
+**AC-055**: The system shall create a `content_analysis_jobs` record with status "pending" for a saved item at the time the item record is written to the database, before the save response is returned to the client.
+
+**AC-056**: The system shall retry a failed analysis job up to 3 times, updating the `retry_count` and `last_attempted_at` fields on each attempt, before setting the job status to "failed" and leaving the item without a summary.
+
+**AC-057**: The system shall guarantee at-least-once delivery of analysis jobs by polling the `content_analysis_jobs` table for pending and retryable records; a job shall not be considered complete until the item record has been updated with the LLM result and the job status has been set to "completed."
+
 ---
 
 ### MOD-004 Acceptance Criteria
@@ -432,6 +451,10 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 **AC-032**: The system shall display the label "No summary available — open to watch" for non-YouTube video items in the dashboard.
 
+**AC-058**: The system shall store the video title and YouTube oEmbed thumbnail URL on the item record and set the summary field to null when a YouTube transcript is unavailable for a saved YouTube link.
+
+**AC-059**: The system shall display the label "Transcript unavailable — open to watch" for YouTube items whose summary field is null in the dashboard.
+
 ---
 
 ### MOD-005 Acceptance Criteria
@@ -443,6 +466,14 @@ The PWA dashboard is a single-page React application that serves as the primary 
 **AC-023**: The system shall allow a user to dismiss a reminder or update its due date and label when an update request is submitted for a reminder the user owns.
 
 **AC-024**: The system shall display a badge indicator on the item card in the dashboard when the item has a reminder due within the next 24 hours.
+
+**AC-060**: The system shall store a push subscription record containing the endpoint URL, auth key, and p256dh key for a user's device when the client submits a push subscription registration request after the user grants browser push permission.
+
+**AC-061**: The system shall read the VAPID public and private keys from the `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` environment variables when signing push notification requests; the system shall fail to start if either variable is absent or empty.
+
+**AC-062**: The system shall delete the push subscription record for an endpoint when the Web Push service returns HTTP 410 Gone for that endpoint, and shall not attempt further delivery to that endpoint.
+
+**AC-063**: The system shall store and dispatch to all active push subscription records associated with a user's account when sending a push notification, so a user with multiple registered devices receives the notification on each device with a valid subscription.
 
 ---
 
@@ -462,6 +493,8 @@ The PWA dashboard is a single-page React application that serves as the primary 
 
 **AC-039**: The system shall not create any staleness reminders and shall not auto-archive any items for a user who has disabled auto-cleanup via the opt-out toggle in account settings.
 
+**AC-066**: The system shall not create a new staleness reminder for an item when a staleness reminder for that item already exists with a status of "pending" or "pending confirmation" at the time the daily job runs for that item.
+
 ---
 
 ### MOD-007 Acceptance Criteria
@@ -473,6 +506,12 @@ The PWA dashboard is a single-page React application that serves as the primary 
 **AC-050**: The system shall trigger the save-all-tabs flow for the current window when the user activates the `Ctrl+Shift+A` shortcut on Windows or Linux, or `Cmd+Shift+A` on macOS.
 
 **AC-051**: The system shall open the quick note input in the extension popup when the user activates the `Ctrl+Shift+N` shortcut on Windows or Linux, or `Cmd+Shift+N` on macOS.
+
+**AC-052**: The system shall read and write JWT access tokens and refresh tokens exclusively from `chrome.storage.local`; the service worker shall not hold token values in module-level or global variables that would be lost when the service worker is terminated between events.
+
+**AC-053**: The system shall read the refresh token from `chrome.storage.local` and request a new access token from the backend refresh endpoint before issuing any API call when the service worker wakes and finds that the stored access token has expired or is absent.
+
+**AC-054**: The system shall display a re-authentication prompt in the extension popup and clear the stored tokens from `chrome.storage.local` when a token refresh attempt returns HTTP 401, so the user can log in again without the popup being stuck in a broken authenticated state.
 
 ---
 
@@ -493,3 +532,5 @@ The PWA dashboard is a single-page React application that serves as the primary 
 **AC-042**: The system shall register as a Share Target so that users can share a URL to TabVault from any mobile app via the native share sheet on a device with the PWA installed.
 
 **AC-043**: The system shall save the shared URL as a new item and trigger the content analysis pipeline when a URL is received via the Share Target.
+
+**AC-064**: The system shall queue a Share Target URL in the service worker using the same offline queue mechanism as AC-041 and submit it to the backend when connectivity is restored, when a URL is received via the Share Target while the device has no internet connectivity.
