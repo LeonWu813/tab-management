@@ -1,0 +1,53 @@
+services:
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 — Primary data store
+  # Version matches PRD tech stack: PostgreSQL 16
+  #
+  # The postgres image automatically creates the database named by
+  # POSTGRES_DB on first startup — no manual CREATE DATABASE step required.
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16
+    container_name: tabvault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tabvault
+      POSTGRES_USER: tabvault
+      POSTGRES_PASSWORD: tabvault_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabvault -d tabvault"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Redis 7.2 — URL deduplication cache, rate-limit counters, session store
+  # Version matches PRD tech stack: Redis 7.2
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7.2-alpine
+    container_name: tabvault-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

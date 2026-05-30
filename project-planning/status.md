@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: doc-sync
-mode: initial
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 828d47b126045c2c8e62c1800137773c5c08416a
-timestamp: 2026-05-30T00:00:00Z
+commit: 59e4efb28e73d0dffb9829be5c2d94d2c234bbda
+timestamp: 2026-05-30T12:00:00Z
 
 ## Current Phase
 
@@ -43,6 +43,52 @@ Test:
 2026-05-30 — [INIT] PRD v1 finalized and approved by user. TabVault Chrome Extension + PWA dashboard with AI-powered tab saving, summarization, deadline detection, reminders, and auto-cleanup. 8 modules defined across 4 phases. Build/lint/test commands left blank to be filled later.
 
 ## Tech Lead Reviews
+
+### Review — 2026-05-30 — init-infra (version checks + infrastructure files)
+
+**Context**: Re-invoked for init infrastructure review. `.env.example` and `docker-compose.yml` were never created; version checks were never run. This review covers those gaps and records any new architectural concerns surfaced by version mismatches.
+
+**Version Check Results**:
+
+| Tool | Required (PRD) | Installed | Status |
+|------|----------------|-----------|--------|
+| Java (JDK) | 21 LTS | 25.0.1 (OpenJDK) | MISMATCH — see concern below |
+| Node.js | 20.x or 22.x LTS | v24.14.1 | MISMATCH — see concern below |
+| npm | 10.x | 11.11.0 | MISMATCH — see concern below |
+| Docker | 24.x or later | 29.4.0 | OK |
+| Docker Compose | v2.x | v5.1.1 | ADVISORY — see note below |
+
+**Concerns** (must address before proceeding):
+
+- **Java 25 (non-LTS) vs. required Java 21 LTS**: Java 25 is a non-LTS preview release (released October 2025). Spring Boot 3.3's supported JDK baseline is Java 17 and Java 21. Java 25 introduces preview features and may expose Spring Boot 3.3 / Hibernate 6 to compatibility issues (e.g., changed reflection APIs, sealed class handling, bytecode changes). Risk is low for a greenfield project that does not use preview features, but it is not the tested configuration. Recommendation: install Java 21 LTS (e.g., `sdk install java 21-tem`) and set `JAVA_HOME` to the 21 installation. This avoids any Spring Boot 3.3 / Quartz 2.3 / Flyway 10 compatibility unknowns before the project has test coverage to catch regressions.
+
+- **Node 24 (Current) vs. required 20.x or 22.x LTS**: Node 24 is the Current release channel (not yet LTS as of the knowledge cutoff). Vite 5, TanStack Query 5, and Zustand 4 are well-tested on Node 20/22 LTS. Node 24 may work, but peer-dependency resolution in npm and native bindings for some packages can behave differently on Current releases. Risk is low for this stack but is outside the stated spec. Recommendation: use `nvm install 22 && nvm use 22` to switch to Node 22 LTS for this project. If you choose to stay on Node 24, run `npm install` and note any warnings before proceeding.
+
+- **npm 11 vs. required 10.x**: npm 11 ships with Node 24. If the team standardizes on Node 22 LTS (recommendation above), npm 10 will follow automatically via `nvm`. If you stay on Node 24 / npm 11, confirm that `openapi-typescript 6` and `web-push` (for VAPID key generation) install without error under npm 11.
+
+**Recommendations** (advisory):
+
+- **Docker Compose v5.1.1**: v5 is a significant version jump beyond the stated v2.x requirement. The `docker compose` (plugin) syntax is unchanged, so the `docker-compose.yml` created for this project will work. However, if your CI/CD environment or teammates use Docker Compose v2.x, ensure the compose file syntax is compatible (it is — no v3-only features are used). This is informational, not a blocker.
+
+- **`.gitignore` check**: Before running `cp .env.example .env`, verify that `.env` (without the `.example` suffix) is in `.gitignore`. The `.env.example` file is committed intentionally (it contains no secrets). The `.env` file must never be committed.
+
+- **VAPID key generation timing**: VAPID keys are only required for Phase 2+ (push notifications, AC-061). For Phase 1 setup, you may leave `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` as placeholders in `.env` — the backend startup gate for those keys (AC-061) only activates when the push notification module is wired. Update these before starting Phase 2.
+
+- **Claude API model identifier**: The original project document uses `claude-sonnet-4-20250514` as the model string in the Java example (Section 11.4). The PRD tech stack table uses `claude-sonnet-4`. These may resolve to the same model, but the `.env.example` has been set to `claude-sonnet-4-20250514` (the versioned ID from the project document) to be consistent with the example code. Verify the current model ID at https://console.anthropic.com when wiring Phase 2.
+
+**Infrastructure Files Created**:
+
+- `.env.example` — all required environment variables with placeholder values and inline comments. Created at project root.
+- `docker-compose.yml` — PostgreSQL 16 and Redis 7.2 services with named volumes, healthchecks, and exact versions from the PRD tech stack. DB is created automatically by the postgres image (no manual CREATE DATABASE step). Created at project root.
+
+**Approved**:
+
+- All prior architectural approvals from Review 2026-05-30 (init) remain in effect.
+- `docker-compose.yml` service definitions are correct for the PRD tech stack (PostgreSQL 16, Redis 7.2).
+- The Quartz JDBC job store, VAPID environment variable injection, and JWT secret injection are all represented as explicit variables in `.env.example`, consistent with Shared Conventions.
+- Phase 1 can proceed without `ANTHROPIC_API_KEY`, `YOUTUBE_API_KEY`, or VAPID keys — all three are gated behind Phase 2/3 features. This preserves the Phase 1 critical path.
+
+---
 
 ### Review — 2026-05-30 — init
 
@@ -90,7 +136,7 @@ Test:
 - VAPID key pairs shall be injected as environment variables (VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY) and never hardcoded or committed to source.
 - Chrome Extension token storage shall use chrome.storage.local exclusively; tokens shall never be stored in memory only, given MV3 service worker lifecycle constraints.
 - The Quartz job store shall be configured as JDBC (PostgreSQL-backed) in all environments, not in-memory.
-- All modules shall follow feature-based directory structure: group files by module/feature, not by type (no top-level /controllers, /services, /repositories directories).
+- All modules shall follow feature-based directory structure: group files by feature/module, not by type (no top-level /controllers, /services, /repositories directories).
 
 ---
 
