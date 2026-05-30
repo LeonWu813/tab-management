@@ -17,14 +17,14 @@ Verify the following versions are installed before proceeding.
 | Tool | Required Version | Check Command |
 |------|-----------------|---------------|
 | Java (JDK) | 21 (LTS) | `java -version` |
-| Node.js | 20.x or 22.x LTS | `node --version` |
-| npm | 10.x | `npm --version` |
+| Node.js | 24.x LTS | `node --version` |
+| npm | 11.x | `npm --version` |
 | Docker Desktop | 24.x or later | `docker --version` |
 | Docker Compose | v2.x (bundled with Docker Desktop) | `docker compose version` |
 
 If any version is missing or outdated, install the correct version before continuing. Use a version manager (e.g., `nvm` for Node, `sdk` for Java) if you need multiple versions on the same machine.
 
-> **Version mismatch warning (recorded 2026-05-30):** The development machine has Java 25 (non-LTS), Node 24 (Current, not LTS), npm 11, and Docker Compose v5. The PRD specifies Java 21 LTS and Node 20.x or 22.x LTS. See the Tech Lead Review in `status.md` (2026-05-30 — init-infra) for full details. You may proceed with the versions installed, but be aware of the noted risks.
+> **Note (recorded 2026-05-30):** The development machine has Java 25 (non-LTS) and Docker Compose v5. Node 24 LTS and npm 11 are the current required versions and match the installed environment. Java 25 is a non-LTS release; see the Tech Lead Review in `status.md` (2026-05-30 — init-infra) for details on the Java version risk. You may proceed, but consider installing Java 21 LTS to match the stated requirement.
 
 ---
 

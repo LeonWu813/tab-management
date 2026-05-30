@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: tech-lead
-mode: review
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 59e4efb28e73d0dffb9829be5c2d94d2c234bbda
-timestamp: 2026-05-30T12:00:00Z
+commit: f9247e9a3ef428ba35f91c3d87a56022a31b865d
+timestamp: 2026-05-30T00:00:00Z
 
 ## Current Phase
 
@@ -37,6 +37,8 @@ Lint:
 Test:
 
 ## PM Updates
+
+2026-05-30 — [TRIVIAL] PRD v3: updated JavaScript runtime to Node.js 24.x LTS and npm 11.x. Node 20 reached EOL April 2026; Node 24 became active LTS October 2025. Added explicit Node.js and npm rows to prd.md Tech Stack table. Updated setup.md Runtime Versions table to match. Updated setup.md version mismatch note — Node/npm mismatch is now resolved; Java 25 note retained. No modules, dependencies, or phases affected.
 
 2026-05-30 — [INIT] PRD v2 finalized. Incorporated all 6 Tech Lead PASS WITH CONDITIONS items and 4 key recommendations into prd.md. New ACs AC-052 through AC-066 added. Tech Lead conditions resolved. PRD ready for Doc-Sync handoff.
 
