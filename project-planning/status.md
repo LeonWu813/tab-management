@@ -2,18 +2,30 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: pm
-mode: change
+agent: doc-sync
+mode: initial
 module: n/a
 result: success
-commit: 95b2b0ae5ada7a76062d9580c2af0f446c074555
+commit: 828d47b126045c2c8e62c1800137773c5c08416a
 timestamp: 2026-05-30T00:00:00Z
 
 ## Current Phase
 
+Phase 1: Foundation
 
 ## Phase Plan
 
+Phase 1: Foundation | Modules: MOD-001, MOD-002, MOD-007, MOD-008
+Milestone: A registered user can save the current tab and all tabs from the Chrome Extension, manually categorize and annotate saved items, and browse, search, and filter saved items in the PWA dashboard. All MOD-001, MOD-002, MOD-007, and MOD-008 Phase 1 acceptance criteria pass in the staging environment. No LLM integration is required at this phase.
+
+Phase 2: LLM Integration | Modules: MOD-003, MOD-004, MOD-005
+Milestone: Saved links are automatically summarized and categorized by the Claude API within 10 seconds of saving. Detected deadlines generate suggested reminders. Manual reminders can be created. Push notifications are dispatched for due reminders. All MOD-003, MOD-004, and MOD-005 acceptance criteria pass in the staging environment.
+
+Phase 3: Video and Notes Enhancements | Modules: MOD-004 (YouTube transcript and non-YouTube metadata), MOD-002 (note auto-categorize), MOD-008 (note creation UI enhancements)
+Milestone: YouTube video links are summarized from transcripts. Non-YouTube video links are saved with metadata and a "No summary available" label. Plain text notes can be created from both the extension and the dashboard. The note auto-categorize action invokes MOD-003 for notes longer than 50 words. All AC-028 through AC-032 and AC-025 through AC-027 and AC-051 pass in the staging environment.
+
+Phase 4: Polish and PWA | Modules: MOD-006, MOD-007 (keyboard shortcuts and batch save), MOD-008 (offline, share target, drag-and-drop, UX refinements)
+Milestone: Auto-cleanup staleness reminders and auto-archiving are active and configurable per user. PWA service worker delivers offline browsing of previously loaded items. The Share Target API allows mobile URL sharing into TabVault. Extension keyboard shortcuts work for save, save-all, and quick note. The dashboard supports drag-and-drop category reassignment, grid/list toggle, and full-text search. All MOD-006 acceptance criteria and all Phase 4 PWA and UX acceptance criteria pass in the production environment with zero P0 bugs open.
 
 ## Build Config
 <!-- Filled by PM during init. PM asks the user for the project's build, lint, and test
@@ -84,6 +96,48 @@ Test:
 
 ## Sync Reports
 
+### Sync Report — Initial Sync — 2026-05-30
+**Sync type:** initial
+**PRD Revision:** 2
+**Files created:**
+- project-planning/production.md
+- project-planning/modules/mod-auth/spec.md
+- project-planning/modules/mod-auth/status.md
+- project-planning/modules/mod-item-management/spec.md
+- project-planning/modules/mod-item-management/status.md
+- project-planning/modules/mod-content-analysis/spec.md
+- project-planning/modules/mod-content-analysis/status.md
+- project-planning/modules/mod-content-extraction/spec.md
+- project-planning/modules/mod-content-extraction/status.md
+- project-planning/modules/mod-reminder-service/spec.md
+- project-planning/modules/mod-reminder-service/status.md
+- project-planning/modules/mod-autocleanup/spec.md
+- project-planning/modules/mod-autocleanup/status.md
+- project-planning/modules/mod-chrome-extension/spec.md
+- project-planning/modules/mod-chrome-extension/status.md
+- project-planning/modules/mod-pwa-dashboard/spec.md
+- project-planning/modules/mod-pwa-dashboard/status.md
+- .claude/agents/engineer-mod-auth.md
+- .claude/agents/qa-mod-auth.md
+- .claude/agents/engineer-mod-item-management.md
+- .claude/agents/qa-mod-item-management.md
+- .claude/agents/engineer-mod-content-analysis.md
+- .claude/agents/qa-mod-content-analysis.md
+- .claude/agents/engineer-mod-content-extraction.md
+- .claude/agents/qa-mod-content-extraction.md
+- .claude/agents/engineer-mod-reminder-service.md
+- .claude/agents/qa-mod-reminder-service.md
+- .claude/agents/engineer-mod-autocleanup.md
+- .claude/agents/qa-mod-autocleanup.md
+- .claude/agents/engineer-mod-chrome-extension.md
+- .claude/agents/qa-mod-chrome-extension.md
+- .claude/agents/engineer-mod-pwa-dashboard.md
+- .claude/agents/qa-mod-pwa-dashboard.md
+**AMBIGUITY markers logged:**
+- production.md Shared Conventions: Build config not yet provided — PM must fill in status.md Build Config. (Build/Lint/Test commands were left blank in status.md Build Config at the time of this sync.)
+**CONFLICT markers logged:**
+- none
+**verify-sync.sh result:** PASS — 6/6 checks passed
 
 ## Engineering Progress
 
