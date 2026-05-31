@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-item-management
-mode: implement
+agent: qa-mod-item-management
+mode: verify
 module: mod-item-management
-result: success
-commit: 488d9d268b40f522e245005a7952f82eadab9169
-timestamp: 2026-05-30T18:11:00Z
+result: bugs-found
+commit: dbb34acf5dc3d7086e09fd3dd56979e3b0f2f604
+timestamp: 2026-05-30T19:30:00Z
 
 ## Current Phase
 
@@ -264,3 +264,7 @@ Agent: tech-lead
 Pattern: Mockito subclass mock maker required for Java 21+ / Java 25 — ByteBuddy's inline mock maker cannot resolve Java 25's class file version; configure `mock-maker-subclass` via `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker` and pin Mockito to 5.14+ in pom.xml.
 Why: Spring Boot 3.3.x ships a Mockito version whose ByteBuddy dependency does not support Java 25. This silently causes all @Mock-annotated tests to fail at startup with "Unknown Java version: 0". The subclass mock maker avoids bytecode instrumentation entirely and works on all Java versions.
 Agent: engineer-mod-auth
+
+Pattern: PostgreSQL tsvector columns mapped in JPA entities must use columnDefinition = "tsvector" — without this, Hibernate schema validation (ddl-auto=validate) rejects the column type as "wrong column type" (expects varchar(255)) and prevents the application from starting.
+Why: tsvector is a PostgreSQL-native type with no standard JDBC Types constant (it maps to Types#OTHER). Hibernate does not know how to match it to a Java String unless columnDefinition is explicitly set. This caused a complete server startup failure in MOD-002. The same issue applies to any other PostgreSQL-native type (e.g., PostgreSQL custom ENUMs) mapped to Java Strings without columnDefinition.
+Agent: engineer-mod-item-management

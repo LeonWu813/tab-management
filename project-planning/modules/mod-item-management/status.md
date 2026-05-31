@@ -102,3 +102,142 @@ Implemented the full MOD-002 Item Management feature. All source files are in th
 - LLM prompt construction: N/A — not applicable
 
 ## QA Results
+
+**QA Agent:** qa-mod-item-management
+**Workflow:** functional-test (first-time verification)
+**Date:** 2026-05-30
+**Verification mode:** Live server + curl (Spring Boot 3.3.5 / PostgreSQL 16 / Redis 7.2)
+
+---
+
+### Infrastructure Checks
+
+- PASS — `.gitignore` contains `.env` entry (grep '^\.env$' confirmed)
+- PASS — `.env` file exists at project root
+- PASS — `.env.example` contains all env vars referenced in setup.md: DATABASE_URL, DATABASE_USERNAME, DATABASE_PASSWORD, REDIS_URL, JWT_SECRET, JWT_ACCESS_TOKEN_EXPIRY_MINUTES, JWT_REFRESH_TOKEN_EXPIRY_DAYS, ANTHROPIC_API_KEY, CLAUDE_MODEL, YOUTUBE_API_KEY, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, UPLOAD_DIR, QUARTZ_JOB_STORE_CLASS, CORS_ALLOWED_ORIGINS
+- PASS — setup.md port 5432 matches docker-compose.yml `postgres` host port 5432
+- PASS — setup.md port 6379 matches docker-compose.yml `redis` host port 6379
+- PASS — Docker: `tabvault-postgres` (postgres:16) status healthy; `tabvault-redis` (redis:7.2-alpine) status healthy
+
+---
+
+### Automated QA Script
+
+Command: `bash ~/.claude/skills/qa-checklist/scripts/run-qa.sh mod-item-management /Users/tsan/Desktop/MacBookPro/tab-management`
+
+Result: PASS (module directory exists, spec found). No test command configured in production.md — automated test run skipped per script warning. Manual verification required for all ACs.
+
+---
+
+### Critical Bug — Server Fails to Start
+
+**BUG-001 (implementation bug — route to Engineer)**
+
+The Spring Boot backend cannot start when running against PostgreSQL (production/dev profile). Hibernate schema validation fails at startup with the following error:
+
+```
+SchemaManagementException: Schema-validation: wrong column type encountered in column [search_vector]
+in table [items]; found [tsvector (Types#OTHER)], but expecting [varchar(255) (Types#VARCHAR)]
+```
+
+**Root cause:**
+`Item.java` line 77 maps the `search_vector` column as:
+```java
+@Column(name = "search_vector", insertable = false, updatable = false)
+private String searchVector;
+```
+
+`String` defaults to `varchar(255)` in Hibernate's type mapping. The actual PostgreSQL column (created by Flyway migration V4) is `TSVECTOR`. Since `spring.jpa.hibernate.ddl-auto=validate` is set in `application.properties`, Hibernate performs schema validation on every startup and aborts when it finds the type mismatch.
+
+**Fix required:** Add `columnDefinition = "tsvector"` to the `@Column` annotation so Hibernate skips type-mismatch validation for this column:
+```java
+@Column(name = "search_vector", insertable = false, updatable = false, columnDefinition = "tsvector")
+private String searchVector;
+```
+
+**Observed:**
+- Input: `./mvnw spring-boot:run` with `.env` loaded, against running PostgreSQL 16 (Docker, healthy)
+- Actual: Application fails to start; exit code 1; full stack trace ends in `SchemaManagementException`
+- Expected: Application starts successfully, `Started TabVaultApplication` logged
+
+**Impact:** The server cannot start at all. All REST endpoints are inaccessible. All AC live-server verifications are blocked by this single bug.
+
+---
+
+### Secondary Finding — Potential item_type Enum Type Mismatch (investigate after BUG-001 fix)
+
+**BUG-002-SUSPECTED (implementation bug — route to Engineer — verify after BUG-001 is fixed)**
+
+The `item_type` column in the `items` table is a PostgreSQL custom ENUM type (`CREATE TYPE item_type AS ENUM ('LINK', 'NOTE', 'VIDEO')`). The `Item.java` entity maps it as:
+```java
+@Enumerated(EnumType.STRING)
+@Column(name = "item_type", nullable = false)
+private ItemType itemType;
+```
+
+Hibernate's `EnumType.STRING` maps to `varchar`, not to a PostgreSQL custom enum type. With `ddl-auto=validate`, Hibernate may also reject this column when it detects the type as `item_type` (PostgreSQL enum) rather than `varchar`. However, because Hibernate stops at the first validation error (BUG-001), this secondary mismatch could not be confirmed from the error log alone.
+
+**Database evidence:** `\d items` confirms `item_type` column type is `item_type` (PostgreSQL custom enum), not `character varying`.
+
+**Fix required (if confirmed):** Add `columnDefinition = "item_type"` to the `@Column` annotation, matching the approach needed for `search_vector`.
+
+Engineer should fix BUG-001 first, then verify whether BUG-002 also blocks startup.
+
+---
+
+### AC Verification Results
+
+All ACs are blocked from live-server verification by BUG-001 (server does not start). Results recorded below reflect the blocking state. Code inspection results are noted where applicable but do not constitute a PASS — live server verification is required per the QA skill for backend modules.
+
+- FAIL AC-001: BLOCKED — server does not start (BUG-001). Cannot verify POST /api/items creates item with URL, page title, favicon URL, and created_at. Code review shows correct implementation (ItemService.saveTab, ItemController.saveTab), but observable behavior via live HTTP cannot be confirmed.
+
+- FAIL AC-002: BLOCKED — server does not start (BUG-001). Cannot verify response is returned within 2 seconds. Code review shows ContentAnalysisJob written to outbox and method returns synchronously before analysis, which is the correct pattern.
+
+- FAIL AC-003: BLOCKED — server does not start (BUG-001). Note: AC-003 ("close the saved tab when close-tab-on-save is enabled") is a browser-side behavior triggered by the extension upon receiving a success response. The backend's role is to return HTTP 200. Code confirms HTTP 200 is returned from saveTab. Full verification requires extension integration test (outside this module's scope).
+
+- FAIL AC-004: BLOCKED — server does not start (BUG-001). Cannot verify duplicate URL returns HTTP 200 with existing item. Code review shows findByUserIdAndUrlAndArchivedFalse duplicate check in ItemService.saveTab, which is the correct pattern.
+
+- FAIL AC-005: BLOCKED — server does not start (BUG-001). Cannot verify POST /api/items/batch returns HTTP 202 immediately. Code review shows ResponseEntity.status(HttpStatus.ACCEPTED) returned synchronously, with @Async batch processing in background.
+
+- FAIL AC-006: BLOCKED — server does not start (BUG-001). Cannot verify batch items are saved individually even when analysis fails. Code review shows per-item try/catch in processBatchAsync with error logging and continuation.
+
+- FAIL AC-018: BLOCKED — server does not start (BUG-001). Cannot verify POST /api/categories creates category with name 1–50 chars, hex color, optional icon and returns created record. Code review shows CreateCategoryRequest validation and CategoryResponse.from.
+
+- FAIL AC-019: BLOCKED — server does not start (BUG-001). Cannot verify DELETE /api/categories/{id} reassigns items to uncategorized. Code review shows itemRepository.reassignItemsToUncategorized call before categoryRepository.delete.
+
+- FAIL AC-020: BLOCKED — server does not start (BUG-001). Cannot verify PATCH /api/items/{id}/category updates category and returns updated item. Code review shows setCategoryId and save in ItemService.reassignCategory.
+
+- FAIL AC-025: BLOCKED — server does not start (BUG-001). Cannot verify POST /api/items/notes creates note item with user-provided body. Code review shows new Item(userId, request.noteBody()) in ItemService.saveNote.
+
+- FAIL AC-026: BLOCKED — server does not start (BUG-001). Cannot verify note body is stored as plain text without modification. Code review shows noteBody assigned directly from request with no sanitization.
+
+- FAIL AC-027: BLOCKED — server does not start (BUG-001). Cannot verify GET /api/items?query= returns note items when query matches note_body. Code review shows native SQL using PostgreSQL full-text search against search_vector, which includes note_body via trigger.
+
+- FAIL AC-065: BLOCKED — server does not start (BUG-001). Cannot verify HTTP 429 is returned when user submits more than 100 URLs in 60-minute window. Code review shows BatchRateLimitService with Redis sliding window counter.
+
+---
+
+### Integration Checks
+
+- PASS — Feature-based directory structure: all source files in `backend/src/main/java/com/tabvault/backend/items/`. Complies with Shared Convention.
+- PASS — Error envelope: `ItemExceptionHandler` maps domain exceptions to `{ "error": { "code": ..., "message": ... } }` structure. Complies with Shared Convention.
+- PASS — No spec features unimplemented per code review: all 10 endpoints defined in spec Input/Output Contract are present in ItemController.
+- PASS — No gold-plating found: no endpoints or behaviors implemented beyond what the spec defines.
+- PASS — Outbox table used: ContentAnalysisJob written on item save. Complies with Shared Convention requiring async jobs tracked in `content_analysis_jobs` outbox table.
+- PASS — tsvector trigger: V4 migration creates `trg_items_search_vector_update` BEFORE INSERT OR UPDATE, using `english` language config. Complies with Shared Convention.
+- FAIL (BUG-001) — `search_vector` column mapped as `String` in Item.java without `columnDefinition = "tsvector"`, causing Hibernate schema validation failure at startup.
+
+---
+
+### Routing
+
+- BUG-001: Implementation bug — route to Engineer. Fix: add `columnDefinition = "tsvector"` to the `search_vector` @Column annotation in `Item.java`.
+- BUG-002-SUSPECTED: Implementation bug (confirm after BUG-001 fix) — route to Engineer. Fix: add `columnDefinition = "item_type"` to the `item_type` @Column annotation in `Item.java` if startup still fails after BUG-001 fix.
+
+---
+
+### Summary
+
+**Result: FAIL**
+
+1 confirmed blocking bug (BUG-001) prevents the server from starting. All 13 ACs are blocked from live-server verification. Code review is consistent with the spec for all ACs, but observable behavior cannot be confirmed without a running server. Once BUG-001 (and if necessary BUG-002) is fixed, full re-verification via live curl tests is required.
