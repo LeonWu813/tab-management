@@ -62,6 +62,14 @@ public class Item {
     @Column(name = "summary", columnDefinition = "TEXT")
     private String summary;
 
+    // Populated by MOD-003 (content analysis pipeline) after Claude API call (AC-010)
+    @Column(name = "suggested_category", length = 100)
+    private String suggestedCategory;
+
+    // Populated by MOD-003 (content analysis pipeline) after Claude API call (AC-010)
+    @Column(name = "content_type", length = 50)
+    private String contentType;
+
     @Column(name = "note_body", columnDefinition = "TEXT")
     private String noteBody;
 
@@ -161,6 +169,22 @@ public class Item {
 
     public void setSummary(String summary) {
         this.summary = summary;
+    }
+
+    public String getSuggestedCategory() {
+        return suggestedCategory;
+    }
+
+    public void setSuggestedCategory(String suggestedCategory) {
+        this.suggestedCategory = suggestedCategory;
+    }
+
+    public String getContentType() {
+        return contentType;
+    }
+
+    public void setContentType(String contentType) {
+        this.contentType = contentType;
     }
 
     public String getNoteBody() {

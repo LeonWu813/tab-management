@@ -89,6 +89,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- Spring WebFlux — provides WebClient for Claude API HTTP calls (MOD-003) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
         <!-- springdoc-openapi for API docs -->
         <dependency>
             <groupId>org.springdoc</groupId>
