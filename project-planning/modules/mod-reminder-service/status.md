@@ -160,6 +160,35 @@ Implemented the full MOD-005 Reminder Service. All module source files are in th
 - Tests pass: PASS — 171/171, exit code 0
 - No new dependencies outside tech stack: PASS — `spring-boot-starter-quartz` is Quartz 2.3 (production.md Tech Stack)
 
+---
+
+## Bugfix: Quartz datasource misconfiguration (quartzDS) — 2026-05-31 (bugfix invocation)
+
+**Bug addressed:** QA Run 3 REGRESSION FAIL — `BeanCreationException: Driver not specified for DataSource: quartzDS` — server cannot start.
+
+### Files changed
+
+- `backend/src/main/resources/application.properties` — removed two lines:
+  - `spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS`
+  - `spring.quartz.properties.org.quartz.dataSource.quartzDS.provider=hikaricp`
+
+  These lines overrode Spring Boot's `QuartzAutoConfiguration` auto-wiring but were incomplete (only `provider=hikaricp` was specified; Quartz's `StdSchedulerFactory` requires `driver`, `URL`, `user`, and `password` for any named datasource it manages). With these lines removed, `QuartzAutoConfiguration` automatically shares the application's primary HikariCP DataSource with the Quartz JDBC store — the standard Spring Boot pattern for `spring.quartz.job-store-type=jdbc`. All other Quartz properties (`jobStore.class`, `driverDelegateClass`, `tablePrefix`, `isClustered`, `scheduler.instanceName`, `scheduler.instanceId`, `overwrite-existing-jobs`) are unchanged.
+
+### Self-Check Results (bugfix — 2026-05-31)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: PASS — `mvn test` exits 0; 171/171 tests pass, 0 failures, 0 errors
+- Git scope: FLAGGED (known false positive) — script flagged `backend/src/main/resources/application.properties` as outside module boundary. This is a justified cross-cutting change: the Quartz config block is in the shared infrastructure configuration file; no module-specific source file boundary applies. `project-planning/modules/mod-content-analysis/status.md` is a pre-existing unstaged working-tree modification from a prior QA run; not staged in this commit.
+
+**Judgment-based items:**
+- Fix is minimal and targeted: PASS — exactly two lines removed; no logic changes, no new config added
+- Remaining Quartz properties are all correct and unchanged: PASS — `jobStore.class`, `driverDelegateClass`, `tablePrefix`, `isClustered`, `instanceName`, `instanceId`, `overwrite-existing-jobs` verified unchanged in application.properties
+- Spring Boot QuartzAutoConfiguration will now wire primary DataSource: PASS — confirmed by Spring Boot 3.3 auto-configuration contract: when `spring.quartz.job-store-type=jdbc` and no named quartzDS datasource is configured, `QuartzAutoConfiguration` automatically wires the primary HikariCP DataSource to the Quartz JDBC store
+- No hardcoded configurable values introduced: PASS — no new properties added; existing env-var-backed properties unchanged
+- Consistent across all config layers: PASS — the quartzDS properties existed only in `application.properties`; no matching properties in `application-test.properties` (tests use in-memory store); no other files referenced quartzDS
+
 ## QA Results
 
 **QA Run 1 — 2026-05-31 — First-time verification (functional-test workflow)**
