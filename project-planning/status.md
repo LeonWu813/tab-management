@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-autocleanup
-mode: implement
+agent: qa-mod-autocleanup
+mode: verify
 module: mod-autocleanup
-result: success
-commit: a05f78d8206f1f8c508174717c2e4735f9d9311d
-timestamp: 2026-05-30T00:00:00Z
+result: bugs-found
+commit: 220d76f384c40b33b020a6267a0ff6cc039da4d9
+timestamp: 2026-05-31T17:56:00Z
 
 ## Current Phase
 

@@ -90,3 +90,104 @@ Implemented the full MOD-006 Auto-Cleanup Scheduler. All module source files are
 - LLM prompt construction: N/A — not applicable
 
 ## QA Results
+
+**QA Run: 2026-05-31 — First-time verification (functional-test workflow)**
+**Verifier: qa-mod-autocleanup**
+**Method: Live server testing against PostgreSQL — curl against real endpoints + DB state inspection**
+
+### Environment
+
+- Docker Compose: postgres:16 (healthy), redis:7.2-alpine (healthy)
+- Server: Spring Boot 3.3.5 on port 8080, started with .env variables
+- Quartz: JDBC job store confirmed active (qrtz_triggers table, PostgreSQL-backed)
+- Unit tests: 26/26 pass (AutoCleanupServiceTest: 17, AutoCleanupControllerTest: 6, AutoCleanupJobTest: 3)
+
+### AC Verification Results
+
+| AC | Description | Result | Evidence |
+|----|-------------|--------|----------|
+| AC-033 | Create staleness reminder with correct label for non-pinned, non-archived stale items | PASS | Job run created PENDING reminders for items with last_visited_at older than 30-day threshold. Label confirmed: "You haven't revisited this in 30 days — still need it?" (em dash U+2014 verified). Pinned item and archived item got no reminder. Never-visited item falls back to created_at via COALESCE. |
+| AC-034 | Auto-archive item 7 days after dismissed reminder if not visited | PASS | Item with DISMISSED reminder (updated_at = 8 days ago) and no post-dismissal visit was auto-archived. Item with DISMISSED reminder but visited 3 days ago was NOT archived. Log: "Item auto-archived: staleness reminder dismissed without visit itemId=47 userId=18 reminderDismissedAt=2026-05-23T17:54:26.926064Z". |
+| AC-035 | Clear pending staleness reminder and update last_visited_at on URL open | PASS | POST /api/items/41/visit returned HTTP 204. PENDING reminder for item 41 deleted (0 remaining after visit). last_visited_at updated from 2026-04-16 to 2026-05-31 (current timestamp). |
+| AC-036 | NOT update last_visited_at on scroll past in list view | PASS | GET /api/items list endpoint returned item 45 with last_visited_at=null; DB confirmed last_visited_at remained null after list call. Only POST /api/items/{id}/visit calls recordVisit. |
+| AC-037 | Not create staleness reminders for pinned items | PASS | Item 42 (is_pinned=TRUE, stale 45 days) received no reminder after multiple job runs. findStaleItemsForUser query enforces is_pinned = FALSE. |
+| AC-038 | Apply updated threshold (14/30/60/90) on next job run; reject other values with HTTP 400 | PASS | PUT /api/cleanup-settings with 14, 30, 60, 90 returned HTTP 200 with updated threshold. PUT with 7, 0, 100, 45 returned HTTP 400 {"error":{"code":"INVALID_STALENESS_THRESHOLD","message":"Invalid staleness threshold: 7. Allowed values are 14, 30, 60, or 90 days.","field":"stalenessThresholdDays"}}. Partial update tested: updating autoCleanupEnabled does not reset stalenessThresholdDays. |
+| AC-039 | No staleness reminders and no auto-archiving for opted-out users | PASS | User 19 opted out via PUT {"autoCleanupEnabled": false}. User 19 has stale item 46. Job ran for 19 users (userCount=19 in log). DB confirmed 0 reminders for user 19. No "Auto-cleanup processed userId=19" log line at INFO level (correctly suppressed to DEBUG). |
+| AC-066 | No duplicate reminder when PENDING or PENDING_CONFIRMATION already exists | PASS | Second job run: user 18 already had PENDING reminders; job logged remindersCreated=0. DB confirmed count stayed at 2. Item 49 with PENDING_CONFIRMATION reminder received no new PENDING reminder after job run. |
+
+### Error Envelope Format
+
+Error responses conform to production.md Shared Convention:
+```json
+{
+  "error": {
+    "code": "INVALID_STALENESS_THRESHOLD",
+    "message": "Invalid staleness threshold: 7. Allowed values are 14, 30, 60, or 90 days.",
+    "field": "stalenessThresholdDays"
+  }
+}
+```
+
+### Shared Convention Checks
+
+| Convention | Check | Result |
+|------------|-------|--------|
+| Feature-based directory structure | All 10 source files in `backend/src/main/java/com/tabvault/backend/autocleanup/` | PASS |
+| Quartz JDBC job store | `spring.quartz.job-store-type=jdbc` in application.properties; qrtz_triggers table verified in PostgreSQL | PASS |
+| Error response envelope | `{"error":{"code":"...","message":"...","field":"..."}}` confirmed in live test | PASS |
+| No hardcoded secrets | Cron expression from AUTO_CLEANUP_CRON env var | PASS |
+| REST error responses use JSON envelope | Confirmed for all tested error cases | PASS |
+
+---
+
+### BUG-001 — Implementation Bug
+
+**Classification:** Implementation bug
+
+**AC affected:** AC-033 (staleness reminder creation), AC-034 (auto-archive)
+
+**Severity:** Low — does not prevent archival; causes a dangling PENDING reminder on the archived item
+
+**Reproducible description:**
+
+Within a single `processUserCleanup` call, `createStalenessReminders` executes before `archiveItemsPassedGracePeriod`. When an item has a DISMISSED staleness reminder whose `updated_at` is older than 7 days (grace period elapsed) AND the item has not been visited since dismissal:
+
+1. `createStalenessReminders` calls `findStaleItemsForUser(userId, cutoff)` — the item is returned because `is_archived=FALSE` at this point in the execution.
+2. The idempotency check (`findByItemIdAndStatus` for PENDING and PENDING_CONFIRMATION) finds nothing — the item only has a DISMISSED reminder.
+3. A new PENDING staleness reminder is created for the item.
+4. `archiveItemsPassedGracePeriod` then runs and archives the item (correct behavior per AC-034).
+
+**Result:** The item is correctly archived, but it also has a new PENDING staleness reminder that can never be acted on (the item is archived). The archived item has reminder status PENDING in the database.
+
+**Exact reproduction:**
+
+```sql
+-- Setup: insert item with dismissed reminder dismissed 8+ days ago, not visited since
+INSERT INTO items (user_id, url, title, item_type, is_pinned, is_archived, created_at, last_visited_at)
+VALUES (18, 'https://test.example.com', 'Test', 'LINK', FALSE, FALSE, NOW() - INTERVAL '90 days', NOW() - INTERVAL '40 days');
+-- (get item id, e.g. 47)
+INSERT INTO suggested_reminders (item_id, user_id, label, urgency, detected_date, status, created_at, updated_at)
+VALUES (47, 18, 'You haven''t revisited this in 30 days — still need it?', 'LOW', NOW()-INTERVAL '10 days', 'DISMISSED', NOW()-INTERVAL '10 days', NOW()-INTERVAL '8 days');
+-- Trigger the job
+```
+
+**Actual output (server log, 4th job run, Worker-4):**
+```
+Staleness reminder created itemId=47 userId=18 thresholdDays=30
+Item auto-archived: staleness reminder dismissed without visit itemId=47 userId=18 reminderDismissedAt=2026-05-23T17:54:26.926064Z
+Auto-cleanup processed userId=18 remindersCreated=1 itemsArchived=1
+```
+
+**Expected output per spec:** The item should be archived. The spec (AC-034) says items should be auto-archived after the grace period; it does not say a new PENDING staleness reminder should be created simultaneously. An item whose dismissal grace period has elapsed should be archived, not reminded again.
+
+**Fix:** Run `archiveItemsPassedGracePeriod` before `createStalenessReminders` within `processUserCleanup`. After archival, archived items are excluded from `findStaleItemsForUser` (which enforces `is_archived = FALSE`), so the just-archived item will not receive a new staleness reminder.
+
+**Alternatively:** Add a check in `createStalenessReminders` to skip items that have a DISMISSED reminder (they are either archived next or have already been handled), but the first fix (reorder) is simpler and correct.
+
+---
+
+### Overall QA Result
+
+**FAIL** — 1 implementation bug found (BUG-001).
+
+7 of 8 acceptance criteria pass cleanly in live testing. BUG-001 affects the interaction between AC-033 and AC-034: items eligible for archival also receive a spurious PENDING staleness reminder in the same job run. Archival itself is correct. The dangling reminder cannot be acted on (item is archived).
