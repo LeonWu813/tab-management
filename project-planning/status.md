@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-autocleanup
-mode: bugfix
+agent: qa-mod-autocleanup
+mode: regression
 module: mod-autocleanup
 result: success
-commit: ecde31dd7c2ae6a926999ec836bb4edaa3374e5d
-timestamp: 2026-05-31T18:10:00Z
+commit: 00e8bc87a208220561af5f26860f6058c439eb36
+timestamp: 2026-05-31T18:17:00Z
 
 ## Current Phase
 

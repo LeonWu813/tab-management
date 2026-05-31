@@ -226,3 +226,72 @@ Auto-cleanup processed userId=18 remindersCreated=1 itemsArchived=1
 **FAIL** — 1 implementation bug found (BUG-001).
 
 7 of 8 acceptance criteria pass cleanly in live testing. BUG-001 affects the interaction between AC-033 and AC-034: items eligible for archival also receive a spurious PENDING staleness reminder in the same job run. Archival itself is correct. The dangling reminder cannot be acted on (item is archived).
+
+---
+
+## QA Run 2 — Regression — 2026-05-31
+
+**Verifier:** qa-mod-autocleanup
+**Bug being re-verified:** BUG-001 (AC-033/AC-034 execution order — spurious PENDING reminder on archived item)
+**Fix applied:** In `AutoCleanupService.processUserCleanup()`, swapped call order — `archiveItemsPassedGracePeriod` now runs BEFORE `createStalenessReminders`.
+**Method:** Live server testing against PostgreSQL — Quartz job triggered via qrtz_triggers next_fire_time manipulation + DB state inspection + server log verification
+
+### Environment
+
+- Docker Compose: postgres:16 (healthy), redis:7.2-alpine (healthy)
+- Server: Spring Boot 3.3.5 on port 8080, PID 71851, started 2026-05-31T11:09 — new JAR built at 11:05 (after bugfix commit ecde31dd)
+- Quartz: JDBC job store active; trigger state WAITING; triggered via direct next_fire_time update in qrtz_triggers
+- Unit tests: 197/197 pass (0 failures, 0 errors, exit code 0)
+
+### BUG-001 Regression Verification
+
+**Scenario reproduced exactly:**
+- Item 50 (user 20): `is_archived=FALSE`, `is_pinned=FALSE`, `last_visited_at` 40 days ago
+- Reminder 21 (item 50): status=DISMISSED, `updated_at` = 2026-05-23T18:07:31Z (8 days before job run)
+- No PENDING or PENDING_CONFIRMATION reminder exists for item 50
+
+**Server log (Worker-1, fixed server):**
+```
+Item auto-archived: staleness reminder dismissed without visit itemId=50 userId=20 reminderDismissedAt=2026-05-23T18:07:31.310285Z
+Auto-cleanup processed userId=20 remindersCreated=0 itemsArchived=1
+```
+
+**DB state after job run:**
+```
+id=50 | is_archived=TRUE | reminder_id=21 | status=DISMISSED (only row)
+```
+
+**Result:** REGRESSION PASS AC-033/AC-034 — BUG-001 original failure scenario resolved.
+- Item is correctly archived (AC-034): PASS
+- No spurious PENDING reminder created (AC-033 not triggered for items about to be archived): PASS
+- `remindersCreated=0` confirmed in log — archival runs first, item is `is_archived=TRUE` before reminder query runs
+
+### Re-verification of All 8 ACs
+
+| AC | Description | Result | Evidence |
+|----|-------------|--------|----------|
+| AC-033 | Create staleness reminder with correct label for non-pinned, non-archived stale items | PASS | Job run 3 (Worker-3): "Staleness reminder created itemId=51 userId=20 thresholdDays=30". Item 51 (user 20, stale 40 days, not pinned, not archived) received PENDING reminder. Label format confirmed from DB: "You haven't revisited this in 30 days — still need it?" (56 bytes, em dash U+2014 present). |
+| AC-034 | Auto-archive item 7 days after dismissed reminder if not visited | PASS (positive + negative cases) | Positive: item 50 archived with `remindersCreated=0` (BUG-001 regression). Negative: item 54 (DISMISSED reminder 9 days ago, visited 3 days ago — after dismissal) confirmed NOT archived after job run; `is_archived=FALSE` in DB. |
+| AC-035 | Clear pending staleness reminder and update last_visited_at on URL open | PASS | Item 52 (user 20) had PENDING reminder 23. POST /api/items/52/visit returned HTTP 204. After call: reminder 23 deleted (0 rows), `last_visited_at` updated from 2026-04-26 to 2026-05-31T18:13:34Z. |
+| AC-036 | NOT update last_visited_at on scroll past in list view | PASS | Item 51 `last_visited_at` = 2026-04-21T18:11:15Z before GET /api/items (HTTP 200). After list call: `last_visited_at` unchanged at 2026-04-21T18:11:15Z. Only POST /api/items/{id}/visit calls recordVisit. |
+| AC-037 | Not create staleness reminders for pinned items | PASS | Item 53 (user 20, `is_pinned=TRUE`, stale 45 days): 0 reminders in DB after job run. Item 53 `is_archived=FALSE` confirmed — not archived either. |
+| AC-038 | Apply updated threshold (14/30/60/90) on next job run; reject other values with HTTP 400 | PASS | PUT /api/cleanup-settings with 14, 30, 60, 90 all returned HTTP 200. PUT with 7, 0, 45, 100 all returned HTTP 400 with `{"error":{"code":"INVALID_STALENESS_THRESHOLD","message":"Invalid staleness threshold: N. Allowed values are 14, 30, 60, or 90 days.","field":"stalenessThresholdDays"}}`. |
+| AC-039 | No staleness reminders and no auto-archiving for opted-out users | PASS | User 20 opted out via PUT `{"autoCleanupEnabled": false}`. Item 51 (user 20, stale) got 0 reminders in DB. Item 51 not archived. Job run 2 (Worker-2) log: no "Auto-cleanup processed userId=20" line at INFO — correctly suppressed to DEBUG for opted-out users. |
+| AC-066 | No duplicate reminder when PENDING or PENDING_CONFIRMATION already exists | PASS | Item 51 received PENDING reminder 24 in job run 3. Job run 4 (Worker-4): "Auto-cleanup processed userId=20 remindersCreated=0 itemsArchived=0". DB confirmed only 1 reminder row for item 51 (reminder 24, PENDING). No duplicate created. |
+
+### Unit Test Results
+
+```
+Tests run: 197, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+197/197 tests pass. No regressions in the automated suite.
+
+### New Regressions
+
+None found.
+
+### Overall QA Run 2 Result
+
+**PASS** — BUG-001 fixed, all 8 acceptance criteria verified, 197/197 unit tests pass, no new regressions introduced by the fix.
