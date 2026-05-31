@@ -235,3 +235,50 @@ All non-AC-012 acceptance criteria were verified against the live server with `C
 ### Unit Test Results
 
 All 107 unit tests pass (31 MOD-003 tests + 76 pre-existing tests). Unit tests use H2 in-memory database with VARCHAR-based enum columns and do not expose the PostgreSQL enum case mismatch.
+
+---
+
+## Bug-Fix Progress (2026-05-30)
+
+### Fixes Applied
+
+**BUG-1 — PostgreSQL enum case mismatch (AC-012 FAIL)**
+
+Root cause: V6 DDL defined `reminder_status` and `urgency_level` enums with lowercase values; Java `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` passes `.name()` (uppercase) to PostgreSQL, which rejects it.
+
+Fix: Created new Flyway migration `V8__fix_enum_case.sql` (immutable V6 not touched per Flyway convention).
+Migration steps:
+1. `DROP TABLE IF EXISTS suggested_reminders` — removes dependent rows
+2. `DROP TYPE IF EXISTS reminder_status` and `urgency_level`
+3. `CREATE TYPE reminder_status AS ENUM ('PENDING_CONFIRMATION', 'CONFIRMED', 'DISMISSED')` — uppercase matching Java
+4. `CREATE TYPE urgency_level AS ENUM ('LOW', 'MEDIUM', 'HIGH')` — uppercase matching Java
+5. `CREATE TABLE suggested_reminders` — identical DDL to V6 but with corrected enum types and uppercase DEFAULT values
+
+Also created `backend/src/test/resources/db/migration/h2/V8__fix_enum_case.sql` — H2 no-op (H2 uses VARCHAR, not PostgreSQL enums; file required to keep Flyway schema history in sync across environments).
+
+Files changed:
+- `backend/src/main/resources/db/migration/V8__fix_enum_case.sql` — NEW
+- `backend/src/test/resources/db/migration/h2/V8__fix_enum_case.sql` — NEW
+
+**BUG-2 — Invalid Claude API model identifier**
+
+Root cause: `application.properties` default `${CLAUDE_MODEL:claude-sonnet-4-20250514}` references a non-existent model ID; every job fails with HTTP 404 after 3 retries.
+
+Fix: Updated default value in `application.properties` to `claude-sonnet-4-5` (accepted by Anthropic API).
+`backend/.env` not modified (contains real secrets, not tracked in git; user updates manually if needed).
+
+Files changed:
+- `backend/src/main/resources/application.properties` — `claude-sonnet-4-20250514` → `claude-sonnet-4-5`
+
+### Self-Check Results (Bug-Fix 2026-05-30)
+
+**Automated checks:**
+- Build (`mvn package -DskipTests`): PASS — BUILD SUCCESS in 1.643s
+- Tests (`mvn test`): PASS — 107/107 tests pass, 0 failures, 0 errors (same test count as original implementation; H2 V8 no-op migration does not break any test)
+
+**Judgment-based items:**
+- V6 not modified: PASS — Flyway immutability convention respected; V8 is a new migration
+- No hardcoded values introduced: PASS — model identifier remains config-driven via `${CLAUDE_MODEL:claude-sonnet-4-5}`
+- H2 test migration created: PASS — V8 H2 file exists; Flyway schema history stays in sync between PostgreSQL and H2 environments
+- No other module files touched: PASS — only V8 PostgreSQL migration, V8 H2 migration, and application.properties default value changed
+- AC-012 fix is correct: PASS — PostgreSQL enum values now match Java `.name()` output; INSERT will bind 'PENDING_CONFIRMATION' against enum value 'PENDING_CONFIRMATION'
