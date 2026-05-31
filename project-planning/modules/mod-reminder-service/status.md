@@ -189,6 +189,50 @@ Implemented the full MOD-005 Reminder Service. All module source files are in th
 - No hardcoded configurable values introduced: PASS — no new properties added; existing env-var-backed properties unchanged
 - Consistent across all config layers: PASS — the quartzDS properties existed only in `application.properties`; no matching properties in `application-test.properties` (tests use in-memory store); no other files referenced quartzDS
 
+## Bugfix: Quartz StdSchedulerFactory DataSource bypass — 2026-05-31 (bugfix round 4)
+
+**Bug addressed:** QA Run 4 REGRESSION FAIL — `SchedulerConfigException: DataSource name not set` — server cannot start.
+
+**Root cause (per QA Run 4 analysis):** `application.properties` contained:
+```
+spring.quartz.properties.org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}
+```
+Setting `org.quartz.jobStore.class` via `spring.quartz.properties.*` causes Quartz's `StdSchedulerFactory.instantiate()` to take over job store initialization natively. In that code path, `JobStoreSupport.initialize()` requires `org.quartz.jobStore.dataSource` to name a configured datasource — it does not fall back to Spring Boot's auto-configured primary DataSource. With the QA Run 3 fix having already removed the incomplete `quartzDS` block, no datasource name exists, causing `SchedulerConfigException: DataSource name not set`.
+
+Spring Boot's `QuartzAutoConfiguration` handles `JobStoreTX` automatically when `spring.quartz.job-store-type=jdbc` is set — the explicit `jobStore.class` property is not needed and actively bypasses Spring Boot's DataSource injection.
+
+### Files changed
+
+- `backend/src/main/resources/application.properties` — removed:
+  ```
+  spring.quartz.properties.org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}
+  ```
+  (and the associated comment block above it)
+- `.env.example` — removed entire `Quartz Job Scheduler` section including `QUARTZ_JOB_STORE_CLASS=org.quartz.impl.jdbcjobstore.JobStoreTX` (dead configuration; no longer referenced anywhere)
+- `QuartzConfig.java` — no changes needed; confirmed no `@Value("${QUARTZ_JOB_STORE_CLASS...}")` reference exists in this file
+
+### Verification: no remaining references
+
+`grep -rn "QUARTZ_JOB_STORE_CLASS\|jobStore.class"` across `application.properties`, `.env.example`, and the entire `reminders/` package — no output (confirmed clean).
+
+### Self-Check Results (bugfix round 4 — 2026-05-31)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: PASS — `mvn test` exits 0; 171/171 tests pass, 0 failures, 0 errors
+- Git scope: FLAGGED (known false positive) — script flagged `backend/src/main/resources/application.properties` and `.env.example` as outside module boundary. Both are justified cross-cutting changes: the Quartz config block is in the shared infrastructure configuration file; `.env.example` documents env vars for the whole project. `project-planning/modules/mod-content-analysis/status.md` is a pre-existing unstaged working-tree modification from a prior QA run; NOT staged in this commit.
+
+**Judgment-based items:**
+- Fix is minimal and targeted: PASS — exactly one property line (plus its comment block) removed from `application.properties`; one section (7 lines) removed from `.env.example`; no logic changes in any Java file
+- Remaining Quartz properties are all correct and unchanged: PASS — `spring.quartz.job-store-type=jdbc`, `spring.quartz.jdbc.initialize-schema=never`, `driverDelegateClass=PostgreSQLDelegate`, `tablePrefix=QRTZ_`, `isClustered=false`, `instanceName=TabVaultScheduler`, `instanceId=AUTO`, `overwrite-existing-jobs=true` all verified present in `application.properties`
+- Spring Boot QuartzAutoConfiguration will now wire primary DataSource: PASS — with `spring.quartz.job-store-type=jdbc` set and no native `org.quartz.jobStore.class` override, `QuartzAutoConfiguration` uses `SchedulerFactoryBean.setDataSource()` to share the primary HikariCP DataSource with Quartz automatically
+- No `@Value("${QUARTZ_JOB_STORE_CLASS...}")` in `QuartzConfig.java`: PASS — confirmed by full file read; `QuartzConfig` only reads `app.reminders.dispatch-cron`
+- No hardcoded configurable values introduced: PASS — no new properties added; existing env-var-backed properties unchanged
+- Tests pass: PASS — 171/171, exit code 0
+
+---
+
 ## QA Results
 
 **QA Run 1 — 2026-05-31 — First-time verification (functional-test workflow)**
