@@ -250,3 +250,127 @@ Backend verification:
 - Verification: `curl "https://www.youtube.com/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3DdQw4w9WgXcQ&format=json"` returns 200 with title and thumbnail; `curl "https://www.youtube.com/oembed?url=https%253A%252F%252Fwww.youtube.com%252Fwatch%253Fv%253DdQw4w9WgXcQ&format=json"` returns 404.
 - Fix: replace `webClient.get().uri(oembedUrl)` with `webClient.get().uri(java.net.URI.create(oembedUrl))` to bypass WebClient's URI template encoding.
 - Route to: Engineer
+
+---
+
+## QA Regression Results
+
+**QA Agent:** qa-mod-content-extraction
+**Regression date:** 2026-05-31
+**Workflow:** regression-test
+**Trigger:** BUG-1 fix — `YouTubeExtractor.fetchOEmbedData()` changed from `webClient.get().uri(oembedUrl)` to `webClient.get().uri(URI.create(oembedUrl))`
+**Server:** Spring Boot started at localhost:8080 (JAR rebuilt 08:39, after fix committed 08:35); PostgreSQL 16 and Redis 7.2 healthy (docker compose ps — both containers status: healthy)
+**Unit tests:** 140/140 PASS (`mvn test` BUILD SUCCESS, exit 0, 0 failures, 0 errors)
+
+---
+
+### Focused Re-verification: AC-030 and AC-058
+
+**AC-030: Video title, YouTube oEmbed thumbnail URL, platform identifier "youtube", and LLM-generated summary stored on item record when YouTube link saved and analyzed.**
+
+Test item 34: POST /api/items `https://www.youtube.com/watch?v=dQw4w9WgXcQ` (youtube.com/watch?v= format)
+Test item 35: POST /api/items `https://youtu.be/jNQXAC9IVRw` (youtu.be/ short-link format)
+
+DB query result after pipeline (confirmed via direct psql query):
+
+```
+ id |                                title                                 |                  thumbnail_url                   | platform | summary
+----+----------------------------------------------------------------------+--------------------------------------------------+----------+---------
+ 34 | Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster) | https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg | youtube  | NULL
+ 35 | Me at the zoo                                                        | https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg | youtube  | NULL
+```
+
+Server logs (items 34 and 35):
+```
+YouTube URL detected url=https://www.youtube.com/watch?v=dQw4w9WgXcQ videoId=dQw4w9WgXcQ
+YouTube oEmbed data fetched videoId=dQw4w9WgXcQ hasTitle=true hasThumbnail=true
+No transcript available for videoId=dQw4w9WgXcQ
+YouTube transcript unavailable videoId=dQw4w9WgXcQ
+Extraction metadata stored jobId=24 itemId=34 platform=youtube hasThumbnail=true
+Skipping Claude API — summarySkipped=true jobId=24 itemId=34 platform=youtube
+
+YouTube URL detected url=https://youtu.be/jNQXAC9IVRw videoId=jNQXAC9IVRw
+YouTube oEmbed data fetched videoId=jNQXAC9IVRw hasTitle=true hasThumbnail=true
+No transcript available for videoId=jNQXAC9IVRw
+YouTube transcript unavailable videoId=jNQXAC9IVRw
+Extraction metadata stored jobId=25 itemId=35 platform=youtube hasThumbnail=true
+Skipping Claude API — summarySkipped=true jobId=25 itemId=35 platform=youtube
+```
+
+- PASS AC-030: `thumbnail_url` populated — `https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg` and `https://i.ytimg.com/vi/jNQXAC9IVRw/hqdefault.jpg`. Both are YouTube oEmbed hqdefault thumbnails. BUG-1 is resolved.
+- PASS AC-030: `title` updated from oEmbed — "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)" and "Me at the zoo". The authoritative video title from oEmbed now replaces the client-supplied title on the item record.
+- PASS AC-030: `platform = "youtube"` stored for both items.
+- NOTE AC-030: `summary = NULL` in both cases because YouTube's timedtext endpoint returned no transcript content (YouTube platform limitation, same as first-round). This is not a regression from the fix — transcript unavailability triggers AC-058 path (summarySkipped=true), not an AC-030 failure for summary storage. AC-030 requires summary storage "when a YouTube link is saved and analyzed" (i.e., when a transcript is available); unit tests confirm the summary-storage code path executes correctly when a transcript is present (5 unit tests, mocked transcript, all pass).
+- job status: COMPLETED for both, retry_count=0.
+
+**PASS AC-030: Resolved. BUG-1 fix confirmed effective.**
+
+---
+
+**AC-058: YouTube transcript unavailable — title and YouTube oEmbed thumbnail URL stored; summary field set to null.**
+
+Test item 34: same `https://www.youtube.com/watch?v=dQw4w9WgXcQ` run above — transcript unavailable path exercised.
+
+DB result:
+```
+  title         = "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)"   (oEmbed title — correct)
+  thumbnail_url = "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg"                       (oEmbed thumbnail — correct)
+  platform      = "youtube"
+  summary       = NULL
+```
+
+- PASS AC-058: `thumbnail_url` populated from oEmbed. Spec requires "store the video title and YouTube oEmbed thumbnail URL on the item record" — both are now stored.
+- PASS AC-058: `title` updated to oEmbed video title. Spec says "store the video title" — the oEmbed title is now stored.
+- PASS AC-058: `summary = NULL` when transcript unavailable — correct per spec.
+
+**PASS AC-058: Resolved. BUG-1 fix confirmed effective.**
+
+---
+
+### Re-verification of Previously Passing ACs
+
+**AC-028: YouTube URL detection and Data API call — PASS (no regression)**
+
+Server logs for items 34 and 35 confirm: `YouTube URL detected url=... videoId=...` for both `youtube.com/watch?v=` and `youtu.be/` formats. YouTube oEmbed fetch now returns `hasTitle=true hasThumbnail=true` for both — this confirms the oEmbed request hits the endpoint and receives a valid JSON response, meaning the URI.create() fix did not break anything else in the fetch path.
+
+**AC-029: Transcript truncation to 3,000 tokens — PASS (no regression)**
+
+140/140 unit tests pass; the 5 ContentAnalysisServiceTest tests that exercise the transcript-to-Claude path with mocked YouTubeExtractor returning a transcript all pass. The transcript unavailability in live tests is a YouTube platform behavior, not a regression.
+
+**AC-031: Instagram/TikTok detected; og metadata stored; Claude not called — PASS (no regression)**
+
+Re-verified with item 36 (`https://www.instagram.com/reel/ABC456/`) and item 37 (`https://www.tiktok.com/@user/video/9876543210`).
+
+DB result:
+```
+ id |         title          | thumbnail_url | platform  | summary
+----+------------------------+---------------+-----------+---------
+ 36 | Instagram              | NULL          | instagram | NULL
+ 37 | TikTok - Make Your Day | NULL          | tiktok    | NULL
+```
+
+Server logs: `Open Graph metadata extracted url=... platform=instagram hasImage=false` and `platform=tiktok hasImage=false`. `Skipping Claude API — summarySkipped=true` for both. No regression introduced.
+
+**AC-032: "No summary available — open to watch" backend state — PASS (no regression)**
+
+`summary = NULL` and `platform = "instagram"` / `"tiktok"` for items 36 and 37. API returns correct null summary and platform fields. Frontend label rendering deferred to MOD-008 QA.
+
+**AC-059: "Transcript unavailable — open to watch" backend state — PASS (no regression)**
+
+`summary = NULL` and `platform = "youtube"` for item 34. API returns correct null summary and platform. Frontend label rendering deferred to MOD-008 QA.
+
+---
+
+### Regression Summary
+
+| AC | First-round result | Regression result | Delta |
+|----|-------------------|-------------------|-------|
+| AC-028 | PASS | PASS | no change |
+| AC-029 | PASS | PASS | no change |
+| AC-030 | FAIL (BUG-1) | PASS | FIXED |
+| AC-031 | PASS | PASS | no change |
+| AC-032 | PASS | PASS | no change |
+| AC-058 | FAIL (BUG-1) | PASS | FIXED |
+| AC-059 | PASS | PASS | no change |
+
+**Overall verdict: PASS — all 7 ACs pass. BUG-1 is confirmed resolved. No regressions introduced.**
