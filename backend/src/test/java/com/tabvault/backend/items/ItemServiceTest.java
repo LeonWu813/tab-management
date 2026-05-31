@@ -1,5 +1,6 @@
 package com.tabvault.backend.items;
 
+import com.tabvault.backend.autocleanup.AutoCleanupService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,9 @@ class ItemServiceTest {
     @Mock
     private BatchRateLimitService batchRateLimitService;
 
+    @Mock
+    private AutoCleanupService autoCleanupService;
+
     private ItemService itemService;
 
     @BeforeEach
@@ -50,7 +54,8 @@ class ItemServiceTest {
                 itemRepository,
                 categoryRepository,
                 contentAnalysisJobRepository,
-                batchRateLimitService);
+                batchRateLimitService,
+                autoCleanupService);
     }
 
     // -------------------------------------------------------------------------

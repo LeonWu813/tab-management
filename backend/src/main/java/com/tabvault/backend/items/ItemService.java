@@ -1,5 +1,6 @@
 package com.tabvault.backend.items;
 
+import com.tabvault.backend.autocleanup.AutoCleanupService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -35,16 +36,19 @@ public class ItemService {
     private final CategoryRepository categoryRepository;
     private final ContentAnalysisJobRepository contentAnalysisJobRepository;
     private final BatchRateLimitService batchRateLimitService;
+    private final AutoCleanupService autoCleanupService;
 
     public ItemService(
             ItemRepository itemRepository,
             CategoryRepository categoryRepository,
             ContentAnalysisJobRepository contentAnalysisJobRepository,
-            BatchRateLimitService batchRateLimitService) {
+            BatchRateLimitService batchRateLimitService,
+            AutoCleanupService autoCleanupService) {
         this.itemRepository = itemRepository;
         this.categoryRepository = categoryRepository;
         this.contentAnalysisJobRepository = contentAnalysisJobRepository;
         this.batchRateLimitService = batchRateLimitService;
+        this.autoCleanupService = autoCleanupService;
     }
 
     // -------------------------------------------------------------------------
@@ -208,8 +212,15 @@ public class ItemService {
     }
 
     /**
-     * Updates the last_visited_at timestamp on an item to the current time.
-     * Called when the user clicks through to the saved URL.
+     * Updates the last_visited_at timestamp on an item to the current time and clears
+     * any pending staleness reminders for the item.
+     *
+     * Called when the user explicitly opens the original URL from the item's dashboard
+     * entry or detail view.
+     *
+     * AC-035: clear any pending staleness reminder and update last_visited_at when the
+     *         user opens the original URL.
+     * AC-036: NOT called on scroll — only on explicit URL open.
      *
      * @param userId the authenticated user's ID
      * @param itemId the ID of the item being visited
@@ -220,6 +231,10 @@ public class ItemService {
                 .orElseThrow(() -> new ItemNotFoundException("Item not found: " + itemId));
         item.setLastVisitedAt(OffsetDateTime.now());
         itemRepository.save(item);
+
+        // AC-035: clear any pending staleness reminders for this item on visit
+        autoCleanupService.clearStalenessRemindersOnVisit(itemId);
+
         logger.debug("Visit recorded userId={} itemId={}", userId, itemId);
     }
 
