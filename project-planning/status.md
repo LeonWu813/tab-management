@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-item-management
-mode: bugfix
+agent: qa-mod-item-management
+mode: regression
 module: mod-item-management
-result: success
-commit: b7fa54dfdc1b66e840470db9daa3db41eff7af52
-timestamp: 2026-05-30T19:26:00Z
+result: bugs-found
+commit: bf0a3b8e49936b47ff9ee4af20b32be09a9772c7
+timestamp: 2026-05-30T19:35:00Z
 
 ## Current Phase
 
@@ -44,7 +44,7 @@ Test:
 
 2026-05-30 — [TRIVIAL] PRD v3: updated JavaScript runtime to Node.js 24.x LTS and npm 11.x. Node 20 reached EOL April 2026; Node 24 became active LTS October 2025. Added explicit Node.js and npm rows to prd.md Tech Stack table. Updated setup.md Runtime Versions table to match. Updated setup.md version mismatch note — Node/npm mismatch is now resolved; Java 25 note retained. No modules, dependencies, or phases affected.
 
-2026-05-30 — [INIT] PRD v2 finalized. Incorporated all 6 Tech Lead PASS WITH CONDITIONS items and 4 key recommendations into prd.md. New ACs AC-052 through AC-066 added. Tech Lead conditions resolved. PRD ready for Doc-Sync handoff.
+2026-05-30 — [INIT] PRD v2 finalized. Incorporated all 6 Tech Lead PASS WITH CONDITIONS items and 4 key recommendations into pmd.md. New ACs AC-052 through AC-066 added. Tech Lead conditions resolved. PRD ready for Doc-Sync handoff.
 
 2026-05-30 — [INIT] PRD v1 finalized and approved by user. TabVault Chrome Extension + PWA dashboard with AI-powered tab saving, summarization, deadline detection, reminders, and auto-cleanup. 8 modules defined across 4 phases. Build/lint/test commands left blank to be filled later.
 
@@ -267,4 +267,12 @@ Agent: engineer-mod-auth
 
 Pattern: PostgreSQL tsvector columns mapped in JPA entities must use columnDefinition = "tsvector" — without this, Hibernate schema validation (ddl-auto=validate) rejects the column type as "wrong column type" (expects varchar(255)) and prevents the application from starting.
 Why: tsvector is a PostgreSQL-native type with no standard JDBC Types constant (it maps to Types#OTHER). Hibernate does not know how to match it to a Java String unless columnDefinition is explicitly set. This caused a complete server startup failure in MOD-002. The same issue applies to any other PostgreSQL-native type (e.g., PostgreSQL custom ENUMs) mapped to Java Strings without columnDefinition.
+Agent: engineer-mod-item-management
+
+Pattern: PostgreSQL custom ENUM types require more than columnDefinition in JPA — @Enumerated(EnumType.STRING) + columnDefinition = "my_enum" stops Hibernate schema validation from failing but does NOT fix JDBC parameter binding. At INSERT time, Hibernate still binds the value as character varying, and PostgreSQL rejects it (SQLState 42804). Fix: add @JdbcTypeCode(SqlTypes.NAMED_ENUM) to the field (Hibernate 6), or change the schema to use VARCHAR with a CHECK constraint.
+Why: The BUG-002 fix in MOD-002 applied columnDefinition only, which masked the schema-validation error at startup but left the runtime INSERT error in place. All item-write endpoints returned HTTP 500 in regression testing. This pattern is likely to recur on any entity using a PostgreSQL custom ENUM.
+Agent: engineer-mod-item-management
+
+Pattern: Multiple @RestControllerAdvice beans require explicit @Order — when GlobalExceptionHandler uses @ExceptionHandler(Exception.class) and a module-specific handler (e.g., ItemExceptionHandler) defines specific exception handlers, Spring may route to the catch-all first if no @Order is set. Fix: annotate the specific handler with @Order(Ordered.HIGHEST_PRECEDENCE) and the catch-all with @Order(Ordered.LOWEST_PRECEDENCE).
+Why: BUG-003 in MOD-002 caused ItemNotFoundException, CategoryNotFoundException, and BatchRateLimitExceededException to all return HTTP 500 instead of 404/404/429. The specific handlers in ItemExceptionHandler were correctly written but never fired. This is a non-obvious Spring MVC behavior that will affect any project with multiple @RestControllerAdvice beans.
 Agent: engineer-mod-item-management
