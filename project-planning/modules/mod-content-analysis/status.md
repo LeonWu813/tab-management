@@ -111,12 +111,14 @@ All pipeline functionality is internal (no REST endpoints in this module — it 
 
 ## QA Results
 
+### QA Run 1 — Functional Test — 2026-05-30
+
 **QA Agent**: qa-mod-content-analysis
 **QA Date**: 2026-05-30
 **Workflow**: functional-test (first-time verification)
 **Overall Result**: FAIL — 2 bugs found
 
-### Test Environment
+#### Test Environment
 
 - Docker: postgres:16 healthy, redis:7.2-alpine healthy
 - Server: Spring Boot 3.3.5 on Java 25.0.1, port 8080
@@ -125,7 +127,7 @@ All pipeline functionality is internal (no REST endpoints in this module — it 
 - Note: Server jar was rebuilt (mvn package -DskipTests) during QA because the pre-existing jar was stale and missing the V7 Flyway migration. The rebuild exposed V7 missing from the jar as a deployment issue.
 - Note: CLAUDE_MODEL env var was temporarily overridden to `claude-sonnet-4-5` for end-to-end pipeline testing after BUG-2 was confirmed.
 
-### AC Verification Results
+#### AC Verification Results
 
 | AC | Description | Result | Notes |
 |----|-------------|--------|-------|
@@ -142,7 +144,7 @@ All pipeline functionality is internal (no REST endpoints in this module — it 
 
 ---
 
-### BUG-1 (Implementation Bug) — AC-012 FAIL: PostgreSQL enum case mismatch for reminder_status and urgency_level
+#### BUG-1 (Implementation Bug) — AC-012 FAIL: PostgreSQL enum case mismatch for reminder_status and urgency_level
 
 **Classification**: Implementation bug
 
@@ -187,7 +189,7 @@ The simplest fix is to update V6 to use uppercase enum values (matching the job_
 
 ---
 
-### BUG-2 (Implementation Bug) — Invalid Claude API model identifier causes all analysis jobs to fail
+#### BUG-2 (Implementation Bug) — Invalid Claude API model identifier causes all analysis jobs to fail
 
 **Classification**: Implementation bug
 
@@ -218,7 +220,7 @@ The model identifier `claude-sonnet-4-20250514` does not exist in the Anthropic 
 
 ---
 
-### ACs Verified as Passing (with corrected CLAUDE_MODEL)
+#### ACs Verified as Passing (with corrected CLAUDE_MODEL)
 
 All non-AC-012 acceptance criteria were verified against the live server with `CLAUDE_MODEL=claude-sonnet-4-5`:
 
@@ -232,7 +234,7 @@ All non-AC-012 acceptance criteria were verified against the live server with `C
 - **AC-056**: 8 permanently-failed jobs all have `retry_count=3`. `last_attempted_at` updated on each attempt. `findPendingAndRetryableJobs` query excludes jobs with `retry_count >= maxRetries`.
 - **AC-057**: JPQL query `WHERE j.status = 'PENDING' OR (j.status = 'FAILED' AND j.retryCount < :maxRetries)` — PROCESSING status correctly excluded so in-flight jobs are not double-processed. Job only set COMPLETED after `itemRepository.save(item)`.
 
-### Unit Test Results
+#### Unit Test Results
 
 All 107 unit tests pass (31 MOD-003 tests + 76 pre-existing tests). Unit tests use H2 in-memory database with VARCHAR-based enum columns and do not expose the PostgreSQL enum case mismatch.
 
@@ -282,3 +284,121 @@ Files changed:
 - H2 test migration created: PASS — V8 H2 file exists; Flyway schema history stays in sync between PostgreSQL and H2 environments
 - No other module files touched: PASS — only V8 PostgreSQL migration, V8 H2 migration, and application.properties default value changed
 - AC-012 fix is correct: PASS — PostgreSQL enum values now match Java `.name()` output; INSERT will bind 'PENDING_CONFIRMATION' against enum value 'PENDING_CONFIRMATION'
+
+---
+
+### QA Run 2 — Regression Test — 2026-05-30
+
+**QA Agent**: qa-mod-content-analysis
+**QA Date**: 2026-05-30
+**Workflow**: regression-test (re-verification after BUG-1 and BUG-2 fixes)
+**Overall Result**: FAIL — BUG-1 confirmed fixed; BUG-2 fix is incomplete (NEW REGRESSION BUG-2R)
+
+#### Test Environment
+
+- Docker: postgres:16 healthy, redis:7.2-alpine healthy
+- Server: Spring Boot built from commit 72cb06a (`engineer-mod-content-analysis(bugfix): fix PostgreSQL enum case mismatch and invalid Claude model ID`), Java 25.0.1, port 8080
+- Jar verified: `jar tf target/tabvault-backend-0.0.1-SNAPSHOT.jar | grep V8` confirms V8 migration is packaged
+- Flyway history: V1–V8 all applied with `success=true`; V8 applied at 2026-05-31 03:39:37 UTC
+- Unit tests: 107/107 pass (mvn test, exit 0)
+- CLAUDE_MODEL override: server started with `CLAUDE_MODEL=claude-sonnet-4-5` (env var override required; see BUG-2R below)
+
+#### Regression: BUG-1
+
+**REGRESSION PASS AC-012**: Original failure scenario resolved.
+
+Reproduction:
+```
+POST /api/items
+{
+  "url": "https://apply.university.edu/grad-admissions?cycle=fall2027",
+  "title": "Graduate School Application - Priority Deadline January 15 2027 - Regular Deadline March 1 2027",
+  "itemType": "LINK"
+}
+```
+
+Result (item 25, job 15):
+- Job 15 completed at 2026-05-31 03:41:52 UTC
+- `suggested_reminders` table now contains 2 rows for item 25:
+
+| id | item_id | detected_date | label | urgency | status |
+|----|---------|---------------|-------|---------|--------|
+| 1  | 25      | 2027-01-15    | Priority application deadline | HIGH | PENDING_CONFIRMATION |
+| 2  | 25      | 2027-03-01    | Regular application deadline  | HIGH | PENDING_CONFIRMATION |
+
+- Server log confirms: `Suggested reminder created itemId=25 userId=11 date=2027-01-15 label=Priority application deadline urgency=HIGH`
+- PostgreSQL accepted uppercase enum values `PENDING_CONFIRMATION` and `HIGH` after V8 migration recreated enums with uppercase values
+
+BUG-1 is fully resolved. V8 migration applied cleanly. No data corruption.
+
+---
+
+#### NEW REGRESSION BUG-2R (Implementation Bug) — BUG-2 fix is incomplete: .env.example still contains invalid model ID
+
+**Classification**: Implementation bug — incomplete fix
+
+**Severity**: Critical — any developer who follows the documented setup (cp .env.example .env) reproduces BUG-2 exactly; the application.properties default fix is overridden by the env var from .env
+
+**Affected ACs**: AC-007, AC-008, AC-009, AC-010, AC-011, AC-012, AC-013 (all pipeline ACs depend on the API call succeeding — same scope as original BUG-2)
+
+**Exact input**:
+A developer follows `setup.md` Step 4 exactly:
+```bash
+cp .env.example .env
+# (fills in real ANTHROPIC_API_KEY and other secrets)
+# CLAUDE_MODEL=claude-sonnet-4-20250514 remains as-is from .env.example
+./mvnw spring-boot:run
+```
+
+**Actual behavior**:
+Spring Boot resolves `${CLAUDE_MODEL:claude-sonnet-4-5}` in application.properties. The `:claude-sonnet-4-5` default is only used when `CLAUDE_MODEL` is absent from the environment. Because `.env` sets `CLAUDE_MODEL=claude-sonnet-4-20250514`, the property resolves to `claude-sonnet-4-20250514`. Every Claude API call returns HTTP 404. All analysis jobs fail with retry_count=3 after 3 attempts.
+
+Verified by inspecting the env variable resolution logic:
+- `application.properties` line 46: `app.content-analysis.model=${CLAUDE_MODEL:claude-sonnet-4-5}`
+- `.env` line 68: `CLAUDE_MODEL=claude-sonnet-4-20250514`
+- `.env.example` line 68: `CLAUDE_MODEL=claude-sonnet-4-20250514`
+- `setup.md` Step 4: instructs developer to `cp .env.example .env`
+
+When the env var is present and set to the broken value, the fixed default in application.properties is never reached.
+
+**QA session workaround**: This regression QA run was conducted with `export CLAUDE_MODEL=claude-sonnet-4-5` explicitly set in the shell before starting the server, overriding the broken .env value. All ACs other than this bug were re-verified using this workaround.
+
+**Expected behavior**:
+With a fresh environment following setup.md, `CLAUDE_MODEL` should default to a valid model ID (`claude-sonnet-4-5`) so the pipeline works without manual intervention.
+
+**Files to fix**:
+- `.env.example` — change `CLAUDE_MODEL=claude-sonnet-4-20250514` to `CLAUDE_MODEL=claude-sonnet-4-5`
+- `.env` (tracked in .gitignore, not in git) — user must also update this manually, or the engineer should add a note to setup.md
+
+Note: `.env` is correctly listed in `.gitignore` (verified: `grep '^\.env$' .gitignore` returns `.env`). Updating `.env.example` is the correct fix since it is the template developers copy.
+
+---
+
+#### Full AC Re-Verification (with CLAUDE_MODEL=claude-sonnet-4-5 override)
+
+| AC | Description | Result | Notes |
+|----|-------------|--------|-------|
+| AC-007 | Claude API request within 5 seconds | PASS | Job 14: pickup=2.57s, Job 15: pickup=1.73s — both under 5s. Job created within 6ms of item creation. |
+| AC-008 | Page text truncated to max 3,000 tokens | PASS | ClaudeApiClient.MAX_INPUT_CHARS=12_000 enforced in truncateToTokenBudget(). Code-verified. Unit-tested (10 tests). |
+| AC-009 | Skip API call on cache hit | PASS | Duplicate URL POST for https://docs.spring.io/spring-framework/reference/ returned existing item 24 directly; Redis key present with TTL=604703s (~168 hours). No new job created for duplicate. |
+| AC-010 | Summary, category, content_type on item record and in response | PASS | DB item 24: summary populated, suggested_category='Development', content_type='documentation'. GET /api/items/24 response includes all three fields. |
+| AC-011 | extract_deadlines invoked only when model detects time-sensitive content | PASS | Log: job 14 deadlineCount=0 (generic Spring docs page), job 15 deadlineCount=2 (deadline-rich title). extract_deadlines switch case only executed when model returns that tool_use block. |
+| AC-012 | Suggested reminder created with detected date, label, urgency, status=pending_confirmation | REGRESSION PASS | 2 rows in suggested_reminders for item 25. status=PENDING_CONFIRMATION, urgency=HIGH. V8 migration confirmed applied. BUG-1 fully resolved. |
+| AC-013 | Pending-confirmation reminders do not trigger push notifications | PASS | No push/notification/dispatch code in backend/src/main/java/com/tabvault/backend/contentanalysis/. Status hardcoded to PENDING_CONFIRMATION. |
+| AC-055 | content_analysis_jobs record created before save response | PASS | Job 14 created_at lags item 24 created_at by 0.006s. Job 15 lags item 25 by 0.002s. Jobs exist in DB before save response reaches client. |
+| AC-056 | Retry up to 3 times with retry_count and last_attempted_at updated | PASS | 8 pre-existing FAILED jobs all have retry_count=3, last_attempted_at set. New jobs 14 and 15 completed on first attempt (retry_count=0). |
+| AC-057 | At-least-once delivery via polling | PASS | JPQL query selects `status='PENDING' OR (status='FAILED' AND retryCount < maxRetries)`. No PENDING jobs remain unprocessed. Job status=COMPLETED only set after itemRepository.save(item). |
+
+#### Unit Test Results (Regression Run)
+
+- Command: `mvn test` (from backend directory)
+- Result: 107 tests run, 0 failures, 0 errors, exit 0
+- Test count identical to previous run — V8 H2 no-op migration introduced no new test failures
+- All 31 MOD-003 tests pass; all 76 pre-existing tests pass
+
+#### Summary
+
+- BUG-1 (AC-012 enum case mismatch): CONFIRMED FIXED — V8 migration applied cleanly; suggested_reminders rows inserted successfully with PENDING_CONFIRMATION and urgency values.
+- BUG-2 (invalid model ID in application.properties default): PARTIALLY FIXED — application.properties default corrected, but .env.example and .env still contain `CLAUDE_MODEL=claude-sonnet-4-20250514` which overrides the fixed default when sourced per setup.md instructions. Pipeline is still broken out of the box.
+- NEW REGRESSION BUG-2R: `.env.example` must also be updated to `CLAUDE_MODEL=claude-sonnet-4-5` to complete the BUG-2 fix.
+- All 10 ACs re-verified passing (with CLAUDE_MODEL override), confirming no other regressions were introduced by the V8 migration or application.properties change.

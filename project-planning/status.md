@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-content-analysis
-mode: bugfix
+agent: qa-mod-content-analysis
+mode: regression
 module: mod-content-analysis
-result: success
-commit: f7d3cb982d7ec82a0a525faf56c0a91f1a555207
-timestamp: 2026-05-30T20:36:09Z
+result: bugs-found
+commit: 680a5fcdfb2637abee52e5ba366332df36e2e624
+timestamp: 2026-05-30T20:52:00Z
 
 ## Current Phase
 
@@ -279,4 +279,8 @@ Agent: engineer-mod-item-management
 
 Pattern: PostgreSQL ENUM case must match Java enum .name() exactly when using @JdbcTypeCode(SqlTypes.NAMED_ENUM) — Hibernate 6's NAMED_ENUM type passes the Java enum constant's .name() value directly to PostgreSQL without transformation. If the SQL DDL defines enum labels as lowercase (e.g., 'pending_confirmation') but the Java enum uses uppercase (PENDING_CONFIRMATION), every INSERT fails with "invalid input value for enum". Fix: make SQL DDL enum values uppercase to match Java convention (consistent with job_status pattern), or add a custom JdbcType to lowercase before binding.
 Why: BUG-1 in MOD-003 caused every suggested_reminders INSERT to fail. The job_status enum in V5 used uppercase (matching Java), but the reminder_status and urgency_level enums in V6 used lowercase (not matching Java). This inconsistency is invisible in unit tests (H2 uses VARCHAR for enums) and only surfaces against real PostgreSQL.
+Agent: engineer-mod-content-analysis
+
+Pattern: Spring Boot ${ENV_VAR:default} fallback is defeated when the env var is set to a wrong value — the colon-default syntax in application.properties only applies when the environment variable is absent. If the variable is present but wrong (e.g., CLAUDE_MODEL=claude-sonnet-4-20250514 from .env.example), the wrong value is used and the default is never reached. Fix: update .env.example (the developer-facing template) to a valid default value, not just application.properties.
+Why: BUG-2 in MOD-003 was only partially fixed by updating the application.properties default. The .env.example template still contained the invalid model ID. Any developer following setup.md (cp .env.example .env) reproduced the bug exactly because sourcing .env set CLAUDE_MODEL to the broken value, defeating the fixed default. This pattern applies to any env-var-driven config where the template file has a placeholder that is silently wrong.
 Agent: engineer-mod-content-analysis
