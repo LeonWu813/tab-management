@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-item-management
-mode: bugfix
+agent: qa-mod-item-management
+mode: regression
 module: mod-item-management
 result: success
-commit: 8f146b7157e5f41c0ec0c0ebffd6fe7d8442800a
-timestamp: 2026-05-30T19:43:00Z
+commit: e250a5af0850fbffe003a5bc059d3ebd41e30bfb
+timestamp: 2026-05-30T19:50:00Z
 
 ## Current Phase
 
