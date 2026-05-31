@@ -112,6 +112,22 @@ public class SuggestedReminder {
         this.status = status;
     }
 
+    /**
+     * Updates the due date of the reminder.
+     * Used by MOD-005 when the user updates the due date of an existing reminder (AC-023).
+     */
+    public void setDetectedDate(java.time.LocalDate detectedDate) {
+        this.detectedDate = detectedDate;
+    }
+
+    /**
+     * Updates the label of the reminder.
+     * Used by MOD-005 when the user updates the label of an existing reminder (AC-023).
+     */
+    public void setLabel(String label) {
+        this.label = label;
+    }
+
     public OffsetDateTime getCreatedAt() {
         return createdAt;
     }

@@ -139,6 +139,23 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.3</version>
         </dependency>
+
+        <!-- Push notifications — Web Push API with VAPID (MOD-005)
+             webpush-java 5.1.1 provides PushService and Notification classes
+             for sending encrypted Web Push messages per RFC 8030 and RFC 8292.
+             Production.md tech stack: webpush-java 1.2 (using 5.1.1 which is the
+             published Maven artifact — the library was renumbered). -->
+        <dependency>
+            <groupId>nl.martijndwars</groupId>
+            <artifactId>web-push</artifactId>
+            <version>5.1.1</version>
+        </dependency>
+        <!-- Bouncy Castle — required by webpush-java for ECDH key agreement (VAPID) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+            <version>1.78.1</version>
+        </dependency>
     </dependencies>
 
     <build>

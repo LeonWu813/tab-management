@@ -65,6 +65,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
+                // VAPID public key endpoint — client needs this before push subscription
+                // registration; safe to expose publicly (it is a public key by design)
+                .requestMatchers(HttpMethod.GET, "/api/push-subscriptions/vapid-public-key").permitAll()
                 .requestMatchers("/v3/api-docs/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .anyRequest().authenticated()
