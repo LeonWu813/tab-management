@@ -110,3 +110,128 @@ All pipeline functionality is internal (no REST endpoints in this module — it 
 - LLM prompt context budget: PASS — MAX_INPUT_CHARS=12,000 (3,000 tokens × 4 chars/token per production.md convention); truncation logs a WARN with original and truncated lengths; unit tests cover below-limit, at-limit, and over-limit cases
 
 ## QA Results
+
+**QA Agent**: qa-mod-content-analysis
+**QA Date**: 2026-05-30
+**Workflow**: functional-test (first-time verification)
+**Overall Result**: FAIL — 2 bugs found
+
+### Test Environment
+
+- Docker: postgres:16 healthy, redis:7.2-alpine healthy
+- Server: Spring Boot 3.3.5 on Java 25.0.1, port 8080
+- Database: PostgreSQL 16.14 at localhost:5432
+- Redis: 7.2 at localhost:6379
+- Note: Server jar was rebuilt (mvn package -DskipTests) during QA because the pre-existing jar was stale and missing the V7 Flyway migration. The rebuild exposed V7 missing from the jar as a deployment issue.
+- Note: CLAUDE_MODEL env var was temporarily overridden to `claude-sonnet-4-5` for end-to-end pipeline testing after BUG-2 was confirmed.
+
+### AC Verification Results
+
+| AC | Description | Result | Notes |
+|----|-------------|--------|-------|
+| AC-007 | Claude API request within 5 seconds | PASS | Measured: 0.5s–4.8s pickup latency across 3 items |
+| AC-008 | Page text truncated to max 3,000 tokens | PASS | MAX_INPUT_CHARS=12,000 (=3,000 tokens) enforced in truncateToTokenBudget() |
+| AC-009 | Skip API call on cache hit | PASS | Server log confirms "Cache hit for URL analysis jobId=12 itemId=22"; Redis key confirmed present |
+| AC-010 | Summary, category, content_type on item record and in response | PASS | DB: summary, suggested_category, content_type populated. GET /api/items/20 returns all three fields. |
+| AC-011 | extract_deadlines invoked only when model detects time-sensitive content | PASS | Log shows deadlineCount=2 for deadline item, deadlineCount=0 for generic items |
+| AC-012 | Suggested reminder created with detected date, label, urgency, status=pending_confirmation | FAIL | See BUG-1: PostgreSQL enum case mismatch — every INSERT fails with "invalid input value for enum reminder_status: PENDING_CONFIRMATION" |
+| AC-013 | Pending-confirmation reminders do not trigger push notifications | PASS | No push notification code in contentanalysis module; status starts as PENDING_CONFIRMATION |
+| AC-055 | content_analysis_jobs record created before save response | PASS | Job ID 10 created_at=03:21:28 UTC, item created_at=03:21:28 UTC — job exists at item creation time |
+| AC-056 | Retry up to 3 times with retry_count and last_attempted_at updated | PASS | Confirmed: 8 permanently-failed jobs all have retry_count=3; last_attempted_at set on each attempt |
+| AC-057 | At-least-once delivery via polling | PASS | findPendingAndRetryableJobs() query selects PENDING and FAILED-with-retry; job set COMPLETED only after item.save() |
+
+---
+
+### BUG-1 (Implementation Bug) — AC-012 FAIL: PostgreSQL enum case mismatch for reminder_status and urgency_level
+
+**Classification**: Implementation bug
+
+**Severity**: Critical — AC-012 completely fails; no suggested reminders can ever be persisted
+
+**Affected ACs**: AC-012
+
+**Exact input**:
+Item saved with deadline-rich title triggering extract_deadlines (item 23):
+```
+POST /api/items
+{
+  "url": "https://admissions.example.edu/apply?cycle=2026",
+  "title": "Harvard Graduate Application - Deadline December 15 2026 - Early Deadline November 1 2026",
+  "itemType": "LINK"
+}
+```
+
+**Actual behavior**:
+Server log at 2026-05-30T20:24:26:
+```
+ERROR: invalid input value for enum reminder_status: "PENDING_CONFIRMATION"
+  at: insert into suggested_reminders (..., status, ...) values (?, ..., 'PENDING_CONFIRMATION', ...)
+```
+Both reminders fail to insert. Table `suggested_reminders` has 0 rows for item 23.
+
+**Expected behavior per AC-012**:
+One `suggested_reminders` row created for each detected deadline with `status = 'pending_confirmation'`, `detected_date`, `label`, `urgency` populated.
+
+**Root cause**:
+- `V6__create_suggested_reminders_table.sql` defines PostgreSQL enums with lowercase values: `reminder_status AS ENUM ('pending_confirmation', 'confirmed', 'dismissed')` and `urgency_level AS ENUM ('low', 'medium', 'high')`
+- `ReminderStatus.java` declares uppercase enum constants: `PENDING_CONFIRMATION`, `CONFIRMED`, `DISMISSED`
+- `UrgencyLevel.java` declares uppercase enum constants: `LOW`, `MEDIUM`, `HIGH`
+- `SuggestedReminder.java` uses `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` which passes the Java enum `.name()` value (uppercase) directly to PostgreSQL, but PostgreSQL enum values are case-sensitive and lowercase-only
+- `job_status` in V5 migration uses uppercase values (`PENDING`, `PROCESSING`, `COMPLETED`, `FAILED`) matching Java's `JobStatus` enum — this inconsistency between V5 and V6 reveals V6 used a different casing convention
+
+**Files to fix**:
+- `backend/src/main/resources/db/migration/V6__create_suggested_reminders_table.sql` — change enum values to uppercase OR
+- `backend/src/main/java/com/tabvault/backend/contentanalysis/ReminderStatus.java` and `UrgencyLevel.java` — change to lowercase constants OR add `@Column(columnDefinition = ...)` with a value converter
+
+The simplest fix is to update V6 to use uppercase enum values (matching the job_status convention): `reminder_status AS ENUM ('PENDING_CONFIRMATION', 'CONFIRMED', 'DISMISSED')` and `urgency_level AS ENUM ('LOW', 'MEDIUM', 'HIGH')`. A new Flyway migration (V8) would be needed to drop and recreate the enums since the DB is already deployed.
+
+---
+
+### BUG-2 (Implementation Bug) — Invalid Claude API model identifier causes all analysis jobs to fail
+
+**Classification**: Implementation bug
+
+**Severity**: Critical — with shipped configuration, every single analysis job fails permanently after 3 retries; pipeline is entirely non-functional out of the box
+
+**Affected ACs**: AC-007, AC-008, AC-009, AC-010, AC-011, AC-012, AC-013 (all pipeline ACs depend on the API call succeeding)
+
+**Exact input**:
+Server starts with default `CLAUDE_MODEL=claude-sonnet-4-20250514` from `.env` and `application.properties`.
+
+**Actual behavior**:
+```
+Claude API HTTP error status=404 NOT_FOUND body={"type":"error","error":{"type":"not_found_error","message":"model: claude-sonnet-4-20250514"},"request_id":"..."}
+```
+Confirmed directly: `POST https://api.anthropic.com/v1/messages` with `"model":"claude-sonnet-4-20250514"` returns HTTP 404.
+
+**Expected behavior**:
+Claude API should accept the model identifier and return analysis results.
+
+**Root cause**:
+The model identifier `claude-sonnet-4-20250514` does not exist in the Anthropic API. The API lists `claude-sonnet-4-5-20250929` as the current claude-sonnet-4 family model. The short alias `claude-sonnet-4-5` is also accepted.
+
+**Files to fix**:
+- `backend/.env` — change `CLAUDE_MODEL=claude-sonnet-4-20250514` to `CLAUDE_MODEL=claude-sonnet-4-5`
+- `backend/src/main/resources/application.properties` — change default value `${app.content-analysis.model:claude-sonnet-4-20250514}` to `${app.content-analysis.model:claude-sonnet-4-5}`
+
+**Note**: After overriding CLAUDE_MODEL to `claude-sonnet-4-5` for testing, the full pipeline works correctly: jobs complete in under 5 seconds, summaries are written to item records, cache deduplication works, and the extract_deadlines tool is properly invoked when deadline content is present.
+
+---
+
+### ACs Verified as Passing (with corrected CLAUDE_MODEL)
+
+All non-AC-012 acceptance criteria were verified against the live server with `CLAUDE_MODEL=claude-sonnet-4-5`:
+
+- **AC-007**: Items 20, 21, 22 had pickup latencies of 2.8s, 0.5s, and 4.8s respectively — all under 5 seconds.
+- **AC-008**: `ClaudeApiClient.truncateToTokenBudget()` enforces 12,000 char limit (3,000 tokens). Code-verified and unit-tested.
+- **AC-009**: Server log line `Cache hit for URL analysis jobId=12 itemId=22 url=https://kubernetes.io/docs/home/` confirms API was skipped for duplicate URL. Redis key `analysis:url:https://kubernetes.io/docs/home/` confirmed present.
+- **AC-010**: `GET /api/items/20` returns `{"summary":"...","suggestedCategory":"Programming","contentType":"documentation",...}`. DB confirmed same values in `items` table columns.
+- **AC-011**: Server log `Analysis job completed jobId=13 itemId=23 ... deadlineCount=2` for deadline item; `deadlineCount=0` for generic items.
+- **AC-013**: No push notification code exists in `backend/src/main/java/com/tabvault/backend/contentanalysis/`.
+- **AC-055**: `content_analysis_jobs` row created at same timestamp as item (within milliseconds). Verified for items 20, 21, 22, 23.
+- **AC-056**: 8 permanently-failed jobs all have `retry_count=3`. `last_attempted_at` updated on each attempt. `findPendingAndRetryableJobs` query excludes jobs with `retry_count >= maxRetries`.
+- **AC-057**: JPQL query `WHERE j.status = 'PENDING' OR (j.status = 'FAILED' AND j.retryCount < :maxRetries)` — PROCESSING status correctly excluded so in-flight jobs are not double-processed. Job only set COMPLETED after `itemRepository.save(item)`.
+
+### Unit Test Results
+
+All 107 unit tests pass (31 MOD-003 tests + 76 pre-existing tests). Unit tests use H2 in-memory database with VARCHAR-based enum columns and do not expose the PostgreSQL enum case mismatch.

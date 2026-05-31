@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-content-analysis
-mode: implement
+agent: qa-mod-content-analysis
+mode: verify
 module: mod-content-analysis
-result: success
-commit: fbe9646b7df73d53a2aec574105dac2cf34b9890
-timestamp: 2026-05-30T20:15:00Z
+result: bugs-found
+commit: c3503e9a8128aee2582968008378683b7a88beb3
+timestamp: 2026-05-30T20:30:00Z
 
 ## Current Phase
 
@@ -276,3 +276,7 @@ Agent: engineer-mod-item-management
 Pattern: Multiple @RestControllerAdvice beans require explicit @Order — when GlobalExceptionHandler uses @ExceptionHandler(Exception.class) and a module-specific handler (e.g., ItemExceptionHandler) defines specific exception handlers, Spring may route to the catch-all first if no @Order is set. Fix: annotate the specific handler with @Order(Ordered.HIGHEST_PRECEDENCE) and the catch-all with @Order(Ordered.LOWEST_PRECEDENCE).
 Why: BUG-003 in MOD-002 caused ItemNotFoundException, CategoryNotFoundException, and BatchRateLimitExceededException to all return HTTP 500 instead of 404/404/429. The specific handlers in ItemExceptionHandler were correctly written but never fired. This is a non-obvious Spring MVC behavior that will affect any project with multiple @RestControllerAdvice beans.
 Agent: engineer-mod-item-management
+
+Pattern: PostgreSQL ENUM case must match Java enum .name() exactly when using @JdbcTypeCode(SqlTypes.NAMED_ENUM) — Hibernate 6's NAMED_ENUM type passes the Java enum constant's .name() value directly to PostgreSQL without transformation. If the SQL DDL defines enum labels as lowercase (e.g., 'pending_confirmation') but the Java enum uses uppercase (PENDING_CONFIRMATION), every INSERT fails with "invalid input value for enum". Fix: make SQL DDL enum values uppercase to match Java convention (consistent with job_status pattern), or add a custom JdbcType to lowercase before binding.
+Why: BUG-1 in MOD-003 caused every suggested_reminders INSERT to fail. The job_status enum in V5 used uppercase (matching Java), but the reminder_status and urgency_level enums in V6 used lowercase (not matching Java). This inconsistency is invisible in unit tests (H2 uses VARCHAR for enums) and only surfaces against real PostgreSQL.
+Agent: engineer-mod-content-analysis
