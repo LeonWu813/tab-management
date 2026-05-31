@@ -3,6 +3,54 @@
 ## Engineering Progress
 
 **Completed: 2026-05-30**
+**Bugfix applied: 2026-05-30**
+
+### Bugfix Summary (BUG-001 + BUG-002)
+
+Applied two JPA `columnDefinition` fixes to `Item.java` to resolve Hibernate schema-validation failures at startup:
+
+**BUG-001 fix** — `search_vector` column:
+```java
+// Before (caused SchemaManagementException: found tsvector, expecting varchar(255))
+@Column(name = "search_vector", insertable = false, updatable = false)
+private String searchVector;
+
+// After
+@Column(name = "search_vector", insertable = false, updatable = false, columnDefinition = "tsvector")
+private String searchVector;
+```
+
+**BUG-002 fix** — `item_type` column:
+```java
+// Before (would cause mismatch: found item_type PostgreSQL enum, expecting varchar)
+@Column(name = "item_type", nullable = false)
+private ItemType itemType;
+
+// After
+@Column(name = "item_type", nullable = false, columnDefinition = "item_type")
+private ItemType itemType;
+```
+
+### Bugfix Self-Check Results (2026-05-30)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: SKIP — no test command in production.md Build Config
+- Git scope: FLAGGED (false positive) — script matched `Item.java` as outside module boundary because the script pattern-matches the module name string rather than the items package path. `backend/src/main/java/com/tabvault/backend/items/Item.java` is the module's source file. Same known issue as original implementation pass.
+
+**Manual verification:**
+- Compile: PASS — `mvn compile` exits 0, no errors
+- Tests: PASS — `mvn test` 76/76 tests pass, 0 failures, 0 errors
+- Server startup: PASS — `java -jar target/tabvault-backend-0.0.1-SNAPSHOT.jar` starts cleanly, `Started TabVaultApplication in 3.604 seconds`, no SchemaManagementException, no startup errors. PostgreSQL 16 and Redis 7.2 both healthy (Docker).
+
+**Judgment-based items:**
+- Both bugs fixed exactly as specified in QA report: PASS
+- No other files modified: PASS — only `Item.java` changed
+- Fix is narrowly scoped (columnDefinition only, no logic change): PASS
+- All 76 existing tests continue to pass: PASS
+- No new dependencies introduced: PASS
+- columnDefinition values match actual PostgreSQL schema from V4 migration (`tsvector`, `item_type` enum): PASS
 
 ### Implementation Summary
 

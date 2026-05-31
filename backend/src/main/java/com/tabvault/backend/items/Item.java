@@ -44,7 +44,7 @@ public class Item {
     private Long categoryId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "item_type", nullable = false)
+    @Column(name = "item_type", nullable = false, columnDefinition = "item_type")
     private ItemType itemType;
 
     @Column(name = "url", columnDefinition = "TEXT")
@@ -73,7 +73,7 @@ public class Item {
 
     // Maintained by a PostgreSQL trigger — never set directly by Hibernate.
     // insertable=false, updatable=false prevents Hibernate from trying to write this column.
-    @Column(name = "search_vector", insertable = false, updatable = false)
+    @Column(name = "search_vector", insertable = false, updatable = false, columnDefinition = "tsvector")
     private String searchVector;
 
     @CreationTimestamp
