@@ -113,7 +113,7 @@ public class YouTubeExtractor {
             logger.debug("Fetching YouTube oEmbed data videoId={}", videoId);
 
             String responseJson = webClient.get()
-                    .uri(oembedUrl)
+                    .uri(URI.create(oembedUrl))
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();

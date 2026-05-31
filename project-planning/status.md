@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: qa-mod-content-extraction
-mode: verify
+agent: engineer-mod-content-extraction
+mode: bugfix
 module: mod-content-extraction
-result: bugs-found
-commit: cd9a0737bf2ae11ff326b80b1223255ad64249ab
-timestamp: 2026-05-31T08:30:00Z
+result: success
+commit: ac2420afcc1e3f2d7c4ac023b5915de684d0cc95
+timestamp: 2026-05-31T08:37:00Z
 
 ## Current Phase
 

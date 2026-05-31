@@ -72,6 +72,20 @@ Implemented MOD-004 Content Extraction in `backend/src/main/java/com/tabvault/ba
 - AI/LLM API calls: N/A for MOD-004 itself (extraction layer, not analysis layer). MOD-003 integration verified: extraction result's pageText is passed as the textToAnalyze argument to claudeApiClient.analyze()
 - LLM prompt construction: N/A — MOD-004 does not construct prompts
 
+## Bug Fix — 2026-05-31
+
+**BUG-1 fix: YouTube oEmbed double-encoding (AC-030, AC-058)**
+
+- File modified: `backend/src/main/java/com/tabvault/backend/contentextraction/YouTubeExtractor.java`, method `fetchOEmbedData()`
+- Change: replaced `webClient.get().uri(oembedUrl)` with `webClient.get().uri(URI.create(oembedUrl))` — passes the already-percent-encoded URL string as a `java.net.URI`, bypassing Spring WebClient's `UriComponentsBuilder.fromUriString()` re-encoding that was double-encoding `%` characters and causing YouTube's oEmbed endpoint to return HTTP 404.
+- `java.net.URI` was already imported at the top of the file; no import change required.
+
+**Self-check (bugfix):**
+- Tests: PASS — 140/140 pass (`mvn test` BUILD SUCCESS, 0 failures, 0 errors)
+- Scope: PASS — only `YouTubeExtractor.java` (one line change within the assigned module) + status.md files modified
+- No new dependencies introduced: PASS
+- No hardcoded values introduced: PASS — fix uses existing `URI.create()` from `java.net`, no config change
+
 ## QA Results
 
 **QA Agent:** qa-mod-content-extraction
