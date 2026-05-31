@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-content-extraction
-mode: implement
+agent: qa-mod-content-extraction
+mode: verify
 module: mod-content-extraction
-result: success
-commit: 3dd838e096e5639650d2d2e91404a9ad557a6380
-timestamp: 2026-05-30T15:15:00Z
+result: bugs-found
+commit: cd9a0737bf2ae11ff326b80b1223255ad64249ab
+timestamp: 2026-05-31T08:30:00Z
 
 ## Current Phase
 
@@ -284,3 +284,7 @@ Agent: engineer-mod-content-analysis
 Pattern: Spring Boot ${ENV_VAR:default} fallback is defeated when the env var is set to a wrong value — the colon-default syntax in application.properties only applies when the environment variable is absent. If the variable is present but wrong (e.g., CLAUDE_MODEL=claude-sonnet-4-20250514 from .env.example), the wrong value is used and the default is never reached. Fix: update .env.example (the developer-facing template) to a valid default value, not just application.properties.
 Why: BUG-2 in MOD-003 was only partially fixed by updating the application.properties default. The .env.example template still contained the invalid model ID. Any developer following setup.md (cp .env.example .env) reproduced the bug exactly because sourcing .env set CLAUDE_MODEL to the broken value, defeating the fixed default. This pattern applies to any env-var-driven config where the template file has a placeholder that is silently wrong.
 Agent: engineer-mod-content-analysis
+
+Pattern: Spring WebClient uri(String) double-encodes already-percent-encoded URLs — when a fully-formed URL string containing percent-encoded query parameter values (e.g., from URLEncoder.encode()) is passed to webClient.get().uri(string), Spring's UriComponentsBuilder re-encodes the % characters, producing double-encoded URLs. The remote server receives malformed query parameters and returns 404. Fix: use webClient.get().uri(java.net.URI.create(encodedUrlString)) instead, which passes the URI as-is without re-encoding.
+Why: BUG-1 in MOD-004 caused every YouTube oEmbed fetch to return 404, leaving thumbnail_url and video title null for all YouTube items. The bug was silent: unit tests mock WebClient and never make real HTTP calls, so all 140 tests passed while the live server consistently failed the oEmbed call. Any Spring WebClient usage that pre-encodes a URL with URLEncoder before passing it to uri(String) will hit this issue.
+Agent: engineer-mod-content-extraction
