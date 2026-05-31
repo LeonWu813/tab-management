@@ -1,6 +1,8 @@
 package com.tabvault.backend.items;
 
 import com.tabvault.backend.shared.error.ApiErrorResponse;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -11,7 +13,13 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  *
  * Uses the same { "error": { "code": "...", "message": "..." } } envelope as
  * all other modules per the shared convention in production.md.
+ *
+ * @Order(Ordered.HIGHEST_PRECEDENCE) ensures these specific handlers are evaluated
+ * before GlobalExceptionHandler's broad Exception.class catch-all, so that
+ * ItemNotFoundException returns 404, CategoryNotFoundException returns 404, and
+ * BatchRateLimitExceededException returns 429 instead of 500.
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class ItemExceptionHandler {
 

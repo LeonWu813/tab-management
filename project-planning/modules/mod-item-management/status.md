@@ -3,9 +3,83 @@
 ## Engineering Progress
 
 **Completed: 2026-05-30**
-**Bugfix applied: 2026-05-30**
+**Bugfix Round 1 applied: 2026-05-30** (BUG-001, partial BUG-002)
+**Bugfix Round 2 applied: 2026-05-30** (BUG-002 complete fix, BUG-003)
 
-### Bugfix Summary (BUG-001 + BUG-002)
+### Bugfix Round 2 Summary (BUG-002 complete + BUG-003)
+
+**BUG-002 complete fix** — `@JdbcTypeCode(SqlTypes.NAMED_ENUM)` added to both custom PostgreSQL enum fields:
+
+`Item.java` — `itemType` field (PostgreSQL type: `item_type`):
+```java
+// Added @JdbcTypeCode(SqlTypes.NAMED_ENUM) so Hibernate 6 binds the enum value
+// directly as a named PostgreSQL enum type rather than character varying.
+@Enumerated(EnumType.STRING)
+@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+@Column(name = "item_type", nullable = false, columnDefinition = "item_type")
+private ItemType itemType;
+```
+
+`ContentAnalysisJob.java` — `status` field (PostgreSQL type: `job_status`):
+```java
+// Same fix — job_status is also a PostgreSQL custom enum type defined in V5 migration.
+// columnDefinition added to match the DB column type for schema consistency.
+@Enumerated(EnumType.STRING)
+@JdbcTypeCode(SqlTypes.NAMED_ENUM)
+@Column(name = "status", nullable = false, columnDefinition = "job_status")
+private JobStatus status;
+```
+
+The QA round 2 bug report identified the symptom as originating from `Item.java` (item_type), but the root cause also applied to `ContentAnalysisJob.java` (job_status). The item INSERT path writes both the item record and a ContentAnalysisJob record in the same transaction, so only fixing `Item.java` was not sufficient. Both entities needed the JDBC type override.
+
+**BUG-003 fix** — `@Order` annotations added to both exception handler classes:
+
+`ItemExceptionHandler.java`:
+```java
+@Order(Ordered.HIGHEST_PRECEDENCE)
+@RestControllerAdvice
+public class ItemExceptionHandler { ... }
+```
+
+`GlobalExceptionHandler.java`:
+```java
+@Order(Ordered.LOWEST_PRECEDENCE)
+@RestControllerAdvice
+public class GlobalExceptionHandler { ... }
+```
+
+Imports added to both files: `org.springframework.core.Ordered`, `org.springframework.core.annotation.Order`.
+
+### Bugfix Round 2 Self-Check Results (2026-05-30)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: SKIP — no test command in production.md Build Config
+- Git scope: FLAGGED (known false positive) — script flagged `Item.java`, `ContentAnalysisJob.java`, `ItemExceptionHandler.java` (all in `backend/items/` — the module's package) and `GlobalExceptionHandler.java` (shared error package, cross-cutting change required by BUG-003 fix). Same known false positive pattern as prior passes; all changes are within scope.
+
+**Manual verification:**
+- Clean compile: PASS — `mvn clean test` exits 0 after changes
+- Tests: PASS — 76/76 tests pass, 0 failures, 0 errors
+- Server startup: PASS — `Started TabVaultApplication in 3.674 seconds`, no SchemaManagementException, no startup errors
+- Smoke test 1 (BUG-002 — POST /api/items): PASS — HTTP 200 with full item record `{id, itemType:"LINK", url, title, faviconUrl, createdAt, ...}`
+- Smoke test 2 (BUG-003 — GET /api/items/99999): PASS — HTTP 404 `{"error":{"code":"ITEM_NOT_FOUND","message":"Item not found: 99999"}}`
+- Smoke test 3 (BUG-003 — DELETE /api/categories/99999): PASS — HTTP 404 `{"error":{"code":"CATEGORY_NOT_FOUND","message":"Category not found: 99999"}}`
+- Smoke test 4 (AC-004 — duplicate URL): PASS — HTTP 200 with existing item record
+- Smoke test 5 (BUG-002 — POST /api/items/notes NOTE type): PASS — HTTP 201 with note body stored as-is including unescaped HTML and newlines
+- Smoke test 6 (BUG-003 — batch rate limit 429): PASS — HTTP 429 `{"error":{"code":"BATCH_RATE_LIMIT_EXCEEDED","message":"Batch save rate limit exceeded..."}}`
+
+**Judgment-based items:**
+- All bugs fixed exactly as specified in QA round 2 report: PASS
+- Root cause extended correctly: PASS — discovered `ContentAnalysisJob.status` had the identical JDBC binding issue; both entities now fixed
+- No other files modified beyond the four prescribed: PASS
+- Fix is narrowly scoped (JDBC type annotation + @Order, no logic change): PASS
+- All 76 existing tests continue to pass: PASS
+- No new dependencies introduced: PASS — `org.hibernate.annotations.JdbcTypeCode`, `org.hibernate.type.SqlTypes`, `org.springframework.core.Ordered`, and `org.springframework.core.annotation.Order` are all part of the existing Hibernate 6 and Spring dependencies already in the project
+
+---
+
+### Bugfix Summary (BUG-001 + BUG-002 Round 1)
 
 Applied two JPA `columnDefinition` fixes to `Item.java` to resolve Hibernate schema-validation failures at startup:
 

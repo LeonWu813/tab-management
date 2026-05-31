@@ -2,6 +2,8 @@ package com.tabvault.backend.shared.error;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -14,7 +16,12 @@ import java.util.List;
 /**
  * Global exception handler that converts exceptions to the standard
  * { "error": { "code", "message", "field" } } JSON envelope.
+ *
+ * @Order(Ordered.LOWEST_PRECEDENCE) ensures module-specific handlers (e.g.,
+ * ItemExceptionHandler, AuthExceptionHandler) are evaluated first, so their
+ * specific handlers fire before this catch-all Exception.class handler.
  */
+@Order(Ordered.LOWEST_PRECEDENCE)
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
