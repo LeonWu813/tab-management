@@ -386,3 +386,147 @@ Required fix: Change every occurrence of `0 0 8 * * *` to `0 0 8 * * ?` in:
 5. `QuartzConfig.java` fallback default in `@Value` annotation
 
 The fix must use `?` for day-of-week when day-of-month is `*` (or vice versa). `0 0 8 * * ?` means: at second 0, minute 0, hour 8, any day of month, any month, no specific day of week — which is "every day at 08:00".
+
+---
+
+## QA Run 3 — 2026-05-31 — Regression — Quartz cron fix re-verification
+
+**Original bug being re-verified:** QA Run 2 REGRESSION FAIL — Invalid Quartz cron expression `0 0 8 * * *` causes `BeanInstantiationException` at startup.
+
+**Engineer fix applied:** All 5 occurrences of `0 0 8 * * *` changed to `0 0 8 * * ?` per the QA Run 2 required fix list.
+
+**Infrastructure:** docker compose ps — tabvault-postgres postgres:16 Up (healthy), tabvault-redis redis:7.2-alpine Up (healthy). Both services healthy.
+
+---
+
+### Step 1: Automated test suite
+
+**Result: 171/171 PASS — no regressions in unit tests**
+
+Command: `cd backend && mvn test`
+
+Output:
+```
+Tests run: 171, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Total time: 6.572 s
+```
+
+Breakdown: 14 ReminderServiceTest + 12 ReminderControllerTest + 5 ReminderSchedulerTest = 31 MOD-005 tests; 140 pre-existing tests. All pass. Exit code 0.
+
+Note: The test suite uses in-memory Quartz (`spring.quartz.job-store-type=memory` in application-test.properties) and `@WebMvcTest` / `@ExtendWith(MockitoExtension.class)`. Neither `QuartzConfig` nor `CronScheduleBuilder.cronSchedule()` is exercised by the unit tests. The cron fix is confirmed by live server startup only.
+
+---
+
+### Step 2: Build — `mvn package -DskipTests`
+
+**Result: BUILD SUCCESS**
+
+Output: `Building jar: backend/target/tabvault-backend-0.0.1-SNAPSHOT.jar` — exits 0 in 2.6 s.
+
+---
+
+### Step 3: Live server startup
+
+**REGRESSION FAIL: cron fix is applied but Quartz DataSource configuration is broken — server cannot start**
+
+**Confirmed fixed:** Log line at startup: `Quartz reminder dispatch cron configured expression='0 0 8 * * ?'` — QuartzConfig was reached and the `?` cron is accepted without error. The QA Run 2 BeanInstantiationException from `CronExpression '0 0 8 * * *' is invalid` is GONE.
+
+**New startup failure:**
+
+```
+BeanCreationException: Error creating bean with name 'quartzScheduler' defined in class
+path resource [org/springframework/boot/autoconfigure/quartz/QuartzAutoConfiguration.class]:
+Driver not specified for DataSource: quartzDS
+...
+Caused by: org.quartz.SchedulerException: Driver not specified for DataSource: quartzDS
+  at org.quartz.impl.StdSchedulerFactory.instantiate(StdSchedulerFactory.java:1017)
+  at org.quartz.impl.StdSchedulerFactory.getScheduler(StdSchedulerFactory.java:1579)
+  at org.springframework.scheduling.quartz.SchedulerFactoryBean.createScheduler(...)
+```
+
+**Root cause:** `application.properties` declares a named `quartzDS` datasource for Quartz's JDBC store:
+```
+spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS
+spring.quartz.properties.org.quartz.dataSource.quartzDS.provider=hikaricp
+```
+Only `provider=hikaricp` is specified. Quartz's `StdSchedulerFactory` requires `driver`, `URL`, `user`, and `password` properties for a named datasource. None are present — the configuration is incomplete.
+
+The standard Spring Boot pattern for `spring.quartz.job-store-type=jdbc` is to NOT configure a separate named datasource. Spring Boot's `QuartzAutoConfiguration` automatically provides the application's primary DataSource to Quartz when `spring.quartz.job-store-type=jdbc` is set and no separate datasource is configured. The `quartzDS` block overrides that auto-wiring but lacks the required connection properties.
+
+**Required fix:** Remove the incomplete `quartzDS` named datasource properties from `application.properties`:
+```
+# REMOVE these two lines:
+spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS
+spring.quartz.properties.org.quartz.dataSource.quartzDS.provider=hikaricp
+```
+Spring Boot's `QuartzAutoConfiguration` will then automatically share the application's existing HikariCP DataSource (already configured via `spring.datasource.*`) with the Quartz JDBC store. No additional datasource configuration is needed.
+
+**Classification:** Implementation bug — introduced alongside the Quartz JDBC fix (QA Run 1 fix). The `quartzDS` configuration was added to `application.properties` as part of the JDBC store setup but is incomplete. The unit test suite does not exercise `QuartzAutoConfiguration` (in-memory store override in test profile) so this defect only surfaces on live server startup.
+
+**Impact:** Server cannot start at all. All 8 ACs are blocked. This is a continued regression — the cron fix resolved the previous startup error but a second startup error in the same Quartz configuration block now prevents the server from reaching port 8080.
+
+---
+
+### Step 4: Quartz tables check (qrtz_*)
+
+**NOT EXECUTED** — server did not reach running state. Flyway migrations did run (log confirms `Current version of schema "public": 11` and `Schema "public" is up to date`) — V11 Quartz DDL has been applied previously and the tables exist. However, the Quartz scheduler bean failed to initialize after Flyway, so trigger storage cannot be verified against a running scheduler.
+
+**DB-level verification (direct psql):**
+
+Flyway log confirmed V11 is current. The `qrtz_*` tables were created by the V11 migration in prior runs. The quartzDS startup error occurs after Flyway completes — the schema is intact but the Quartz scheduler cannot connect to it due to the incomplete datasource config.
+
+---
+
+### Step 5: qrtz_cron_triggers check
+
+**NOT EXECUTED** — Quartz scheduler did not start; trigger was not stored. Once the DataSource fix is applied and the server starts, the trigger will be stored by `QuartzConfig.reminderDispatchTrigger()` on first startup.
+
+---
+
+### Re-verification status of all 8 ACs
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-021 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-022 | REGRESSION FAIL | Quartz scheduler failed to initialize — dispatch job not stored |
+| AC-023 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-024 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-060 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-061 | REGRESSION FAIL | Server did not start before VAPID validation could be reached (Quartz failure earlier in context init) |
+| AC-062 | REGRESSION FAIL | Server did not start; dispatch job not reachable |
+| AC-063 | REGRESSION FAIL | Server did not start; dispatch job not reachable |
+
+---
+
+### QA Run 3 summary
+
+**REGRESSION PASS (partial):** QA Run 2 bug — `CronExpression '0 0 8 * * *' is invalid` — is confirmed fixed. QuartzConfig log shows `expression='0 0 8 * * ?'` accepted without error.
+
+**NEW REGRESSION (implementation bug): Quartz named datasource `quartzDS` incomplete — server cannot start**
+
+Routing: Engineer
+
+Classification: Implementation bug. The `application.properties` Quartz JDBC block declares a named `quartzDS` datasource with only `provider=hikaricp` specified. Quartz's `StdSchedulerFactory` requires `driver`, `URL`, `user`, and `password` for any named datasource it manages. Spring Boot's `QuartzAutoConfiguration` would otherwise automatically share the application's primary DataSource with Quartz — but the presence of the `quartzDS` block overrides that auto-wiring and forces Quartz to configure the datasource itself, where it finds an incomplete definition.
+
+Exact error:
+```
+org.quartz.SchedulerException: Driver not specified for DataSource: quartzDS
+  at org.quartz.impl.StdSchedulerFactory.instantiate(StdSchedulerFactory.java:1017)
+```
+
+Required fix: Remove these two lines from `backend/src/main/resources/application.properties`:
+```
+spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS
+spring.quartz.properties.org.quartz.dataSource.quartzDS.provider=hikaricp
+```
+Spring Boot's `QuartzAutoConfiguration` automatically provides the application's HikariCP DataSource to the Quartz JDBC store when `spring.quartz.job-store-type=jdbc` is set and no separate Quartz datasource is configured. The remaining properties (`jobStore.class`, `driverDelegateClass`, `tablePrefix`, `isClustered`, `scheduler.instanceName`, `scheduler.instanceId`, `overwrite-existing-jobs`) are correct and should remain.
+
+**FAIL AC-021:** Input=[POST /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with reminder record per spec]
+**FAIL AC-022:** Input=[Quartz JDBC scheduler startup], Actual=[BeanCreationException: Driver not specified for DataSource: quartzDS], Expected=[Quartz scheduler starts, CronTrigger stored in JDBC store per production.md Shared Convention]
+**FAIL AC-023:** Input=[PATCH /api/reminders/{id} with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with updated reminder record per spec]
+**FAIL AC-024:** Input=[GET /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with dueWithin24Hours badge flag per spec]
+**FAIL AC-060:** Input=[POST /api/push-subscriptions with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with push subscription record per spec]
+**FAIL AC-061:** Input=[Server startup with valid VAPID keys], Actual=[Server fails in Quartz context init before VapidConfig @PostConstruct runs], Expected=[Server starts and VAPID keys validated from env vars per spec]
+**FAIL AC-062:** Input=[Push service returns HTTP 410 Gone], Actual=[Server did not start; dispatch unreachable], Expected=[Push subscription deleted per spec]
+**FAIL AC-063:** Input=[Reminder dispatch for user with multiple subscriptions], Actual=[Server did not start; dispatch job not stored], Expected=[All active push subscriptions for user receive notification per spec]

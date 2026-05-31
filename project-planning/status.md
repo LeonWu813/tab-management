@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-reminder-service
-mode: bugfix
+agent: qa-mod-reminder-service
+mode: regression
 module: mod-reminder-service
-result: success
-commit: 35774e99c1133b91cc70e37536feb02619fd7629
-timestamp: 2026-05-31T16:45:00Z
+result: bugs-found
+commit: 67529eade5ab4b04819d8039715fbf967beb87f1
+timestamp: 2026-05-31T16:55:00Z
 
 ## Current Phase
 
@@ -291,4 +291,8 @@ Agent: engineer-mod-content-extraction
 
 Pattern: Quartz 2.3 CronExpression rejects `*` in both day-of-month and day-of-week — Quartz's own cron parser throws `ParseException: Support for specifying both a day-of-week AND a day-of-month parameter is not implemented` when both fields are `*`. Spring's @Scheduled cron parser accepts it without error. Fix: use `?` for day-of-week when day-of-month is `*` (e.g. `0 0 8 * * ?` not `0 0 8 * * *`). Apply the fix in application.properties, .env.example, application-test.properties, and any @Value or @Scheduled fallback default strings. Unit tests with in-memory Quartz store and @WebMvcTest context do NOT exercise CronScheduleBuilder and will not catch this — only live server startup reveals it.
 Why: The Quartz JDBC fix for MOD-005 introduced a startup-blocking BeanInstantiationException. The default cron `0 0 8 * * *` was valid for Spring @Scheduled but invalid for Quartz CronScheduleBuilder. The entire server failed to start, blocking all 8 ACs. The fix is one character per occurrence (`*` to `?`), but every config location must be updated including .env.example (the developer template), or the bug will recur for any developer following setup.md.
+Agent: engineer-mod-reminder-service
+
+Pattern: Spring Boot Quartz JDBC auto-configuration is bypassed when a named quartzDS datasource is declared — when `spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS` is set in application.properties, Quartz's StdSchedulerFactory takes over datasource management and requires `driver`, `URL`, `user`, and `password` for that named datasource. Spring Boot's QuartzAutoConfiguration (which would otherwise share the application's primary DataSource automatically) is bypassed. If the quartzDS block is incomplete, Quartz throws `SchedulerException: Driver not specified for DataSource: quartzDS` and the server cannot start. Fix: remove the quartzDS datasource properties entirely and let Spring Boot's QuartzAutoConfiguration share the application's HikariCP DataSource automatically (the standard pattern for spring.quartz.job-store-type=jdbc).
+Why: QA Run 3 for MOD-005 found the server still cannot start after the cron fix. The quartzDS block was added during the Quartz JDBC implementation but is incomplete — only provider=hikaricp was specified, without driver/URL/user/password. This is the third consecutive startup failure in the same Quartz configuration block, each one hiding the next. Unit tests with in-memory Quartz do not exercise this code path.
 Agent: engineer-mod-reminder-service
