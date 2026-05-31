@@ -140,6 +140,14 @@
             <version>3.0.3</version>
         </dependency>
 
+        <!-- Quartz job scheduler — JDBC-backed persistent job store (MOD-005, MOD-006)
+             spring-boot-starter-quartz pulls in quartz 2.3.x and wires it into
+             Spring's scheduler factory via Spring Boot auto-configuration. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-quartz</artifactId>
+        </dependency>
+
         <!-- Push notifications — Web Push API with VAPID (MOD-005)
              webpush-java 5.1.1 provides PushService and Notification classes
              for sending encrypted Web Push messages per RFC 8030 and RFC 8292.

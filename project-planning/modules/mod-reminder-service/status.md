@@ -92,6 +92,48 @@ Implemented the full MOD-005 Reminder Service. All module source files are in th
 - AI/LLM API calls: N/A — this module does not call the LLM API
 - LLM prompt construction: N/A — not applicable
 
+---
+
+## Bugfix: Quartz JDBC Job Store — 2026-05-30 (bugfix invocation)
+
+**Bug addressed:** QA Run 1 FAIL — Quartz JDBC job store not implemented (production.md Shared Convention violation).
+
+### Files changed
+
+**New source files:**
+- `backend/src/main/java/com/tabvault/backend/reminders/ReminderDispatchJob.java` — implements `org.quartz.Job`; replaces the `@Scheduled` execution path with a Quartz-managed job. Spring Boot's `SpringBeanJobFactory` auto-configuration ensures constructor injection works correctly. `execute()` contains the same dispatch logic as `ReminderScheduler.dispatchDueReminders()`.
+- `backend/src/main/java/com/tabvault/backend/reminders/QuartzConfig.java` — `@Configuration` bean that declares a `JobDetail` (stored durable) and a `CronTrigger` (with `MISFIRE_INSTRUCTION_FIRE_AND_PROCEED`) for `ReminderDispatchJob`. Both are stored in the JDBC job store so they survive service restarts.
+- `backend/src/main/resources/db/migration/V11__create_quartz_tables.sql` — full Quartz 2.3 PostgreSQL DDL (`qrtz_*` tables + indexes). Flyway owns the schema; `spring.quartz.jdbc.initialize-schema=never` prevents Quartz from auto-managing it.
+- `backend/src/test/resources/db/migration/h2/V11__create_quartz_tables.sql` — H2-compatible version of the Quartz DDL for test Flyway version parity. At test time, `spring.quartz.job-store-type=memory` means Quartz never reads these tables.
+
+**Modified files:**
+- `backend/pom.xml` — added `spring-boot-starter-quartz` dependency (Quartz 2.3 via Spring Boot BOM).
+- `backend/src/main/resources/application.properties` — added full Quartz JDBC configuration block: `spring.quartz.job-store-type=jdbc`, `spring.quartz.jdbc.initialize-schema=never`, `org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}`, `org.quartz.jobStore.driverDelegateClass=org.quartz.impl.jdbcjobstore.PostgreSQLDelegate`, `spring.quartz.overwrite-existing-jobs=true`.
+- `backend/src/test/resources/application-test.properties` — added `spring.quartz.job-store-type=memory` override so unit tests use in-memory Quartz and do not require PostgreSQL access.
+
+### Self-Check Results (bugfix — 2026-05-30)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: PASS (manual) — `./mvnw test` exits 0; 171/171 tests pass (31 MOD-005 + 140 pre-existing), 0 failures, 0 errors
+- Git scope: FLAGGED (known false positive) — script flagged 4 modified files outside the module package directory. All are justified cross-cutting changes required by the bug fix:
+  - `backend/pom.xml` — adds `spring-boot-starter-quartz` (Quartz 2.3 is in production.md Tech Stack)
+  - `backend/src/main/resources/application.properties` — adds Quartz JDBC config block (the exact config mandated by the QA bug report)
+  - `backend/src/test/resources/application-test.properties` — adds `spring.quartz.job-store-type=memory` test override
+  - `project-planning/modules/mod-content-analysis/status.md` — pre-existing working tree modification from a prior QA agent run; NOT staged in this commit
+
+**Judgment-based items:**
+- Quartz JDBC store wired in all environments: PASS — `spring.quartz.job-store-type=jdbc` in application.properties; overridden to `memory` in test profile only
+- Flyway owns Quartz schema: PASS — `spring.quartz.jdbc.initialize-schema=never`; V11 migration creates all `qrtz_*` tables
+- `ReminderDispatchJob` implements `org.quartz.Job`: PASS — `execute(JobExecutionContext)` contains the dispatch logic
+- `QuartzConfig` registers JobDetail and CronTrigger: PASS — `storeDurably(true)` and `withMisfireHandlingInstructionFireAndProceed()`
+- `QUARTZ_JOB_STORE_CLASS` env var wired: PASS — `${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}` in application.properties
+- `PostgreSQLDelegate` configured: PASS — `org.quartz.jobStore.driverDelegateClass=org.quartz.impl.jdbcjobstore.PostgreSQLDelegate`
+- No hardcoded configurable values: PASS — cron from `REMINDER_DISPATCH_CRON` env var; job store class from `QUARTZ_JOB_STORE_CLASS` env var
+- Tests pass: PASS — 171/171, exit code 0
+- No new dependencies outside tech stack: PASS — `spring-boot-starter-quartz` is Quartz 2.3 (production.md Tech Stack)
+
 ## QA Results
 
 **QA Run 1 — 2026-05-31 — First-time verification (functional-test workflow)**
