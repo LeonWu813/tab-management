@@ -46,11 +46,11 @@ public class ReminderScheduler {
      *
      * Cron expression is read from {@code app.reminders.dispatch-cron} which is set from
      * the {@code REMINDER_DISPATCH_CRON} environment variable.
-     * Default: "0 0 8 * * *" — runs at 08:00 UTC every day.
+     * Default: "0 0 8 * * ?" — runs at 08:00 UTC every day.
      *
      * AC-022: dispatches to all registered push subscriptions for the user when due.
      */
-    @Scheduled(cron = "${app.reminders.dispatch-cron:0 0 8 * * *}")
+    @Scheduled(cron = "${app.reminders.dispatch-cron:0 0 8 * * ?}")
     public void dispatchDueReminders() {
         LocalDate today = LocalDate.now();
         logger.info("Reminder dispatch job started date={}", today);

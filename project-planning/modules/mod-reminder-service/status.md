@@ -94,6 +94,32 @@ Implemented the full MOD-005 Reminder Service. All module source files are in th
 
 ---
 
+## Bugfix: Invalid Quartz Cron Expression — 2026-05-31 (bugfix invocation)
+
+**Bug addressed:** QA Run 2 REGRESSION FAIL — Invalid Quartz cron expression `0 0 8 * * *` causes `BeanInstantiationException` at startup. Quartz 2.3's `CronExpression` parser rejects `*` in both day-of-month and day-of-week simultaneously. Spring's `@Scheduled` parser accepts it; Quartz's own parser does not.
+
+### Files changed
+
+- `backend/src/main/resources/application.properties` line 65 — `app.reminders.dispatch-cron` default changed from `0 0 8 * * *` to `0 0 8 * * ?`
+- `backend/src/test/resources/application-test.properties` line 39 — `app.reminders.dispatch-cron` test value changed from `0 0 8 * * *` to `0 0 8 * * ?`
+- `backend/src/main/java/com/tabvault/backend/reminders/QuartzConfig.java` line 41 — `@Value` fallback default changed from `0 0 8 * * *` to `0 0 8 * * ?`
+- `backend/src/main/java/com/tabvault/backend/reminders/ReminderScheduler.java` lines 49, 53 — `@Scheduled` fallback default and Javadoc comment updated from `0 0 8 * * *` to `0 0 8 * * ?`
+- `.env.example` line 100 — `REMINDER_DISPATCH_CRON` example value changed from `0 0 8 * * *` to `0 0 8 * * ?`
+
+### Self-Check Results (bugfix — 2026-05-31)
+
+**Automated checks:**
+- Tests: PASS — `mvn test` exits 0; 171/171 tests pass, 0 failures, 0 errors
+
+**Judgment-based items:**
+- All 5 locations updated: PASS — verified with grep; no remaining `0 0 8 * * *` occurrences in any of the 5 files
+- Fix is minimal and targeted: PASS — single character change per occurrence (`*` to `?` in day-of-week field); no logic changes
+- No hardcoded configurable values introduced: PASS — fallback `?` is consistent; env var override path unchanged
+- Test suite unaffected: PASS — tests use in-memory Quartz (`spring.quartz.job-store-type=memory`) so `QuartzConfig.CronScheduleBuilder` is not loaded during tests; fix does not change test behavior
+- Consistent across all config layers: PASS — application.properties default, .env.example template, test properties, @Value fallback, and @Scheduled fallback are all synchronized to `0 0 8 * * ?`
+
+---
+
 ## Bugfix: Quartz JDBC Job Store — 2026-05-30 (bugfix invocation)
 
 **Bug addressed:** QA Run 1 FAIL — Quartz JDBC job store not implemented (production.md Shared Convention violation).

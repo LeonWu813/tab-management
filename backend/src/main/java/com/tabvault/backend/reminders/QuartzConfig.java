@@ -38,7 +38,7 @@ public class QuartzConfig {
     private final String dispatchCron;
 
     public QuartzConfig(
-            @Value("${app.reminders.dispatch-cron:0 0 8 * * *}") String dispatchCron) {
+            @Value("${app.reminders.dispatch-cron:0 0 8 * * ?}") String dispatchCron) {
         this.dispatchCron = dispatchCron;
         logger.info("Quartz reminder dispatch cron configured expression='{}'", dispatchCron);
     }
