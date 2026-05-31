@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-reminder-service
-mode: bugfix
+agent: qa-mod-reminder-service
+mode: regression
 module: mod-reminder-service
 result: success
-commit: fd9322785ff680386c87569c4a14603464cc6c4a
-timestamp: 2026-05-31T17:15:00Z
+commit: 5f88ea270cb89f14433b3887caf41e44e509e22a
+timestamp: 2026-05-31T17:22:00Z
 
 ## Current Phase
 
