@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: qa-mod-auth
-mode: verify
-module: mod-auth
-result: spec-issue
-commit: 21020f4a7a7b97b3499bed9310f43496986a23be
-timestamp: 2026-05-30T17:45:00Z
+agent: pm
+mode: change
+module: n/a
+result: success
+commit: adb230e5c0c6a95bd890681896b57f31e7085df8
+timestamp: 2026-05-30T18:00:00Z
 
 ## Current Phase
 
@@ -37,6 +37,8 @@ Lint:
 Test:
 
 ## PM Updates
+
+2026-05-30 — [TRIVIAL] MOD-001 spec gap logged (QA escalation). QA verified all MOD-001 ACs pass (first-time verification). Post-verification, QA identified a spec omission: project-planning/modules/mod-auth/spec.md Input/Output Contract lists only "valid email address, password of at least 8 characters" as registration inputs, but the output requires a displayName field and the implementation correctly requires displayName as mandatory input. This is a spec clarification only — the PRD requirement (AC-044) and the implementation are both correct; the spec's Input section simply omitted the field. Required fix: add "displayName: required string" to the registration Input line in project-planning/modules/mod-auth/spec.md. No modules, dependencies, phases, or PRD text are affected. This entry is the handoff instruction to Doc-Sync.
 
 2026-05-30 — [INIT] PRD v3 cleared for Doc-Sync handoff. Setup Confirmation gate satisfied: Tech Lead recorded infrastructure verification in status.md (postgres:16 and redis:7.2-alpine both healthy). PRD quality checklist passed — all 8 required sections present, no [DECISION NEEDED] markers, no orphan user stories, all ACs referenced and defined, all modules have explicit dependencies. No new Tech Lead findings require PRD edits: init-infra review concerns were environment/setup items (Java 25 advisory, VAPID key timing, Claude model ID note) already addressed in setup.md and .env.example; none are product requirements. PRD v3 is the authoritative version for Phase 1 development.
 
