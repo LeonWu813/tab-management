@@ -241,3 +241,122 @@ Reproducible description: Start the server, confirm the cron is registered. Rest
 
 - INFO: AC-062 (410 Gone deletion) has no dedicated unit test in ReminderSchedulerTest or ReminderControllerTest. The code path is correctly implemented (verified by inspection) but is not covered by the automated test suite. This is a test coverage gap, not a functional bug. The spec requires the behavior, not specific test coverage.
 - INFO: `dueWithin24Hours` uses date-based (not time-based) comparison: `dueDate <= today + 1 day`. Since all reminders have date-only granularity (no time component), this is a reasonable interpretation of "within 24 hours." The spec does not specify sub-day precision.
+
+---
+
+## QA Run 2 — 2026-05-30 — Regression — Quartz JDBC fix re-verification
+
+**Original bug being re-verified:** QA Run 1 FAIL — Quartz JDBC job store not implemented.
+
+**Infrastructure:** docker compose ps — tabvault-postgres postgres:16 Up (healthy), tabvault-redis redis:7.2-alpine Up (healthy). Both services healthy.
+
+---
+
+### Step 1: Automated test suite
+
+**Result: 171/171 PASS — no regressions in unit tests**
+
+Command: `/Users/tsan/.m2/wrapper/dists/apache-maven-3.9.12-bin/5nmfsn99br87k5d4ajlekdq10k/apache-maven-3.9.12/bin/mvn test` from `backend/`
+
+Output:
+```
+Tests run: 171, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Total time: 6.441 s
+```
+
+Breakdown: 14 ReminderServiceTest + 12 ReminderControllerTest + 5 ReminderSchedulerTest = 31 MOD-005 tests; 140 pre-existing tests. All pass. Exit code 0.
+
+Note: The test suite uses in-memory Quartz (`spring.quartz.job-store-type=memory` in application-test.properties) and `@WebMvcTest` / `@ExtendWith(MockitoExtension.class)` — neither `QuartzConfig` nor its `CronScheduleBuilder.cronSchedule()` call is exercised by the unit tests. This is why the cron expression defect (see below) does not surface in the test suite.
+
+---
+
+### Step 2: Live server startup — original bug scenario
+
+**REGRESSION FAIL: original fix introduced a new startup-blocking bug**
+
+**Scenario:** Start the server with default configuration (no `REMINDER_DISPATCH_CRON` override in `.env`).
+
+**Command:** `set -a && source .env && set +a && java -jar backend/target/tabvault-backend-0.0.1-SNAPSHOT.jar`
+
+**Actual:** Server fails to start. Startup exception:
+
+```
+Caused by: org.springframework.beans.BeanInstantiationException: Failed to instantiate
+  [org.quartz.Trigger]: Factory method 'reminderDispatchTrigger' threw exception with
+  message: CronExpression '0 0 8 * * *' is invalid.
+...
+Caused by: java.lang.RuntimeException: CronExpression '0 0 8 * * *' is invalid.
+  at org.quartz.CronScheduleBuilder.cronSchedule(CronScheduleBuilder.java:111)
+  at com.tabvault.backend.reminders.QuartzConfig.reminderDispatchTrigger(QuartzConfig.java:85)
+...
+Caused by: java.text.ParseException: Support for specifying both a day-of-week AND a
+  day-of-month parameter is not implemented.
+  at org.quartz.CronExpression.buildExpression(CronExpression.java:511)
+```
+
+**Root cause:** Quartz 2.3 uses a 7-field cron format. Its parser rejects cron expressions where both the day-of-month field and the day-of-week field are set to `*` simultaneously, because Quartz does not support that combination. The valid Quartz expression for "every day at 08:00" is `0 0 8 * * ?` (use `?` — "no specific value" — for day-of-week when day-of-month is `*`). Spring `@Scheduled` uses a different cron parser that accepts `*` in both fields, which is why `ReminderScheduler.java`'s `@Scheduled(cron = "0 0 8 * * *")` compiles and runs. `QuartzConfig.reminderDispatchTrigger()` calls `CronScheduleBuilder.cronSchedule(dispatchCron)` which delegates to Quartz's own `CronExpression` parser, which rejects it.
+
+**Affected locations:**
+- `backend/src/main/resources/application.properties` line 65: `app.reminders.dispatch-cron=${REMINDER_DISPATCH_CRON:0 0 8 * * *}` — default value is invalid for Quartz
+- `.env.example`: `REMINDER_DISPATCH_CRON=0 0 8 * * *` — documented example value is invalid for Quartz
+- `backend/src/test/resources/application-test.properties` line 39: `app.reminders.dispatch-cron=0 0 8 * * *` — test override is invalid for Quartz (masked because test profile uses in-memory Quartz store and does not load `QuartzConfig` beans in unit test context)
+- `ReminderScheduler.java` line 53: `@Scheduled(cron = "${app.reminders.dispatch-cron:0 0 8 * * *}")` — Spring's own cron parser accepts `*` here; no defect in this file
+- `QuartzConfig.java` line 85: consumes `dispatchCron` from the same property and passes it to `CronScheduleBuilder.cronSchedule()` — this is where the Quartz-incompatible value causes the failure
+
+**Impact:** The server cannot start at all with the default configuration. No endpoints are reachable. All 8 ACs are blocked by this startup failure. This is a complete regression — the fix for QA Run 1 introduced a startup-blocking defect.
+
+**FAIL AC-021:** Input=[POST /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with reminder record per spec]
+**FAIL AC-022:** Input=[Quartz CronTrigger for daily dispatch], Actual=[BeanInstantiationException at startup — CronExpression '0 0 8 * * *' is invalid], Expected=[CronTrigger stored in Quartz JDBC store and fires on schedule per production.md Shared Convention]
+**FAIL AC-023:** Input=[PATCH /api/reminders/{id} with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with updated reminder record per spec]
+**FAIL AC-024:** Input=[GET /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with dueWithin24Hours badge flag per spec]
+**FAIL AC-060:** Input=[POST /api/push-subscriptions with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with push subscription record per spec]
+**FAIL AC-061:** Input=[Server startup with valid VAPID keys], Actual=[Server fails before VapidConfig is reached — BeanInstantiationException in QuartzConfig], Expected=[Server starts and reads VAPID keys from env vars per spec]
+**FAIL AC-062:** Input=[Push service returns HTTP 410 Gone], Actual=[Server did not start; endpoint unreachable], Expected=[Push subscription deleted per spec]
+**FAIL AC-063:** Input=[Reminder dispatch for user with multiple subscriptions], Actual=[Server did not start; dispatch job never runs], Expected=[All active push subscriptions for user receive notification per spec]
+
+---
+
+### Step 3: Quartz JDBC table check
+
+**NOT EXECUTED** — server failed to start before Flyway ran. Cannot verify Quartz tables exist. If the cron fix is applied and the server starts, the Flyway V11 migration DDL (`qrtz_*` tables) is in place and correct by inspection. The fix must resolve the startup failure first.
+
+---
+
+### Step 4: qrtz_cron_triggers check
+
+**NOT EXECUTED** — server failed to start. Cannot verify trigger is stored.
+
+---
+
+### Re-verification status of all 8 ACs
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-021 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-022 | REGRESSION FAIL | QuartzConfig startup exception blocks server |
+| AC-023 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-024 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-060 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-061 | REGRESSION FAIL | Server did not start before VAPID validation |
+| AC-062 | REGRESSION FAIL | Server did not start; dispatch job unreachable |
+| AC-063 | REGRESSION FAIL | Server did not start; dispatch job unreachable |
+
+---
+
+### Failures summary
+
+**NEW REGRESSION (implementation bug): Invalid Quartz cron expression in default config — server cannot start**
+
+Routing: Engineer
+
+Classification: Implementation bug introduced by the Quartz JDBC fix. The `QuartzConfig` bean uses `CronScheduleBuilder.cronSchedule()` which delegates to Quartz's own `CronExpression` parser. Quartz 2.3 does not accept `*` in both day-of-month and day-of-week simultaneously. Spring `@Scheduled` uses a different parser that does accept it — but `QuartzConfig` does not use Spring's parser.
+
+Required fix: Change every occurrence of `0 0 8 * * *` to `0 0 8 * * ?` in:
+1. `backend/src/main/resources/application.properties` — default value in `app.reminders.dispatch-cron`
+2. `.env.example` — documented example value for `REMINDER_DISPATCH_CRON`
+3. `backend/src/test/resources/application-test.properties` — test value for `app.reminders.dispatch-cron`
+4. `ReminderScheduler.java` fallback default in `@Scheduled` annotation (Spring accepts both, but `?` is consistent)
+5. `QuartzConfig.java` fallback default in `@Value` annotation
+
+The fix must use `?` for day-of-week when day-of-month is `*` (or vice versa). `0 0 8 * * ?` means: at second 0, minute 0, hour 8, any day of month, any month, no specific day of week — which is "every day at 08:00".

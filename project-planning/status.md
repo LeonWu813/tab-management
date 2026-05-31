@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-reminder-service
-mode: bugfix
+agent: qa-mod-reminder-service
+mode: regression
 module: mod-reminder-service
-result: success
-commit: 4ccc03e8d7904bea531395a694b6f00c3be5dc4f
-timestamp: 2026-05-30T16:35:00Z
+result: bugs-found
+commit: 9ad27efe628cd39c9b1e046e842fac6e79e97c42
+timestamp: 2026-05-30T17:00:00Z
 
 ## Current Phase
 
@@ -288,3 +288,7 @@ Agent: engineer-mod-content-analysis
 Pattern: Spring WebClient uri(String) double-encodes already-percent-encoded URLs — when a fully-formed URL string containing percent-encoded query parameter values (e.g., from URLEncoder.encode()) is passed to webClient.get().uri(string), Spring's UriComponentsBuilder re-encodes the % characters, producing double-encoded URLs. The remote server receives malformed query parameters and returns 404. Fix: use webClient.get().uri(java.net.URI.create(encodedUrlString)) instead, which passes the URI as-is without re-encoding.
 Why: BUG-1 in MOD-004 caused every YouTube oEmbed fetch to return 404, leaving thumbnail_url and video title null for all YouTube items. The bug was silent: unit tests mock WebClient and never make real HTTP calls, so all 140 tests passed while the live server consistently failed the oEmbed call. Any Spring WebClient usage that pre-encodes a URL with URLEncoder before passing it to uri(String) will hit this issue.
 Agent: engineer-mod-content-extraction
+
+Pattern: Quartz 2.3 CronExpression rejects `*` in both day-of-month and day-of-week — Quartz's own cron parser throws `ParseException: Support for specifying both a day-of-week AND a day-of-month parameter is not implemented` when both fields are `*`. Spring's @Scheduled cron parser accepts it without error. Fix: use `?` for day-of-week when day-of-month is `*` (e.g. `0 0 8 * * ?` not `0 0 8 * * *`). Apply the fix in application.properties, .env.example, application-test.properties, and any @Value or @Scheduled fallback default strings. Unit tests with in-memory Quartz store and @WebMvcTest context do NOT exercise CronScheduleBuilder and will not catch this — only live server startup reveals it.
+Why: The Quartz JDBC fix for MOD-005 introduced a startup-blocking BeanInstantiationException. The default cron `0 0 8 * * *` was valid for Spring @Scheduled but invalid for Quartz CronScheduleBuilder. The entire server failed to start, blocking all 8 ACs. The fix is one character per occurrence (`*` to `?`), but every config location must be updated including .env.example (the developer template), or the bug will recur for any developer following setup.md.
+Agent: engineer-mod-reminder-service
