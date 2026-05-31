@@ -82,7 +82,7 @@ class ItemControllerTest {
     void saveTab_newUrl_returns200WithItemRecord() throws Exception {
         ItemResponse response = new ItemResponse(
                 1L, "LINK", "https://example.com", "Example Page",
-                "https://example.com/favicon.ico", null, null, null, null, null,
+                "https://example.com/favicon.ico", null, null, null, null, null, null, null,
                 false, false, null, OffsetDateTime.now());
 
         when(itemService.saveTab(eq(USER_ID), any(SaveItemRequest.class))).thenReturn(response);
@@ -107,7 +107,7 @@ class ItemControllerTest {
     void saveTab_duplicateUrl_returns200WithExistingItem() throws Exception {
         ItemResponse existingResponse = new ItemResponse(
                 42L, "LINK", "https://example.com", "Example Page",
-                null, "A summary", null, null, null, null,
+                null, "A summary", null, null, null, null, null, null,
                 false, false, null, OffsetDateTime.now());
 
         when(itemService.saveTab(eq(USER_ID), any(SaveItemRequest.class))).thenReturn(existingResponse);
@@ -207,7 +207,7 @@ class ItemControllerTest {
     void saveNote_validBody_returns201WithNoteItem() throws Exception {
         ItemResponse response = new ItemResponse(
                 5L, "NOTE", null, null, null, null, null, null,
-                "My note body", null,
+                "My note body", null, null, null,
                 false, false, null, OffsetDateTime.now());
 
         when(itemService.saveNote(eq(USER_ID), any(SaveNoteRequest.class))).thenReturn(response);
@@ -244,7 +244,7 @@ class ItemControllerTest {
     void listItems_withQuery_returnsSearchResults() throws Exception {
         ItemResponse noteResult = new ItemResponse(
                 7L, "NOTE", null, null, null, null, null, null,
-                "kotlin tutorial tips", null,
+                "kotlin tutorial tips", null, null, null,
                 false, false, null, OffsetDateTime.now());
         Page<ItemResponse> page = new PageImpl<>(List.of(noteResult), PageRequest.of(0, 20), 1);
 
@@ -260,7 +260,7 @@ class ItemControllerTest {
     @DisplayName("listItems without query returns all items")
     void listItems_noQuery_returnsAllItems() throws Exception {
         ItemResponse item = new ItemResponse(
-                1L, "LINK", "https://example.com", "Example", null, null, null, null, null, null,
+                1L, "LINK", "https://example.com", "Example", null, null, null, null, null, null, null, null,
                 false, false, null, OffsetDateTime.now());
         Page<ItemResponse> page = new PageImpl<>(List.of(item), PageRequest.of(0, 20), 1);
 
@@ -354,7 +354,7 @@ class ItemControllerTest {
     @DisplayName("AC-020: reassignCategory returns HTTP 200 with updated item record")
     void reassignCategory_validRequest_returns200WithUpdatedItem() throws Exception {
         ItemResponse response = new ItemResponse(
-                10L, "LINK", "https://example.com", "Example", null, null, null, null, null, 3L,
+                10L, "LINK", "https://example.com", "Example", null, null, null, null, null, null, null, 3L,
                 false, false, null, OffsetDateTime.now());
 
         when(itemService.reassignCategory(eq(USER_ID), eq(10L), eq(3L))).thenReturn(response);

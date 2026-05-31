@@ -1,5 +1,7 @@
 package com.tabvault.backend.contentanalysis;
 
+import com.tabvault.backend.contentextraction.ContentExtractionService;
+import com.tabvault.backend.contentextraction.ExtractionResult;
 import com.tabvault.backend.items.Category;
 import com.tabvault.backend.items.CategoryRepository;
 import com.tabvault.backend.items.ContentAnalysisJob;
@@ -51,6 +53,7 @@ public class ContentAnalysisService {
     private final SuggestedReminderRepository reminderRepository;
     private final ClaudeApiClient claudeApiClient;
     private final AnalysisCacheService analysisCacheService;
+    private final ContentExtractionService contentExtractionService;
 
     public ContentAnalysisService(
             ContentAnalysisJobPollingRepository jobRepository,
@@ -58,13 +61,15 @@ public class ContentAnalysisService {
             CategoryRepository categoryRepository,
             SuggestedReminderRepository reminderRepository,
             ClaudeApiClient claudeApiClient,
-            AnalysisCacheService analysisCacheService) {
+            AnalysisCacheService analysisCacheService,
+            ContentExtractionService contentExtractionService) {
         this.jobRepository = jobRepository;
         this.itemRepository = itemRepository;
         this.categoryRepository = categoryRepository;
         this.reminderRepository = reminderRepository;
         this.claudeApiClient = claudeApiClient;
         this.analysisCacheService = analysisCacheService;
+        this.contentExtractionService = contentExtractionService;
     }
 
     // -------------------------------------------------------------------------
@@ -147,6 +152,47 @@ public class ContentAnalysisService {
             String title = item.getTitle();
             Long userId = item.getUserId();
 
+            // ---------------------------------------------------------------
+            // MOD-004: Content Extraction
+            // Extract text or metadata from the URL before calling Claude.
+            // For NOTE items (url=null): skip extraction; use note body text.
+            // For non-YouTube video items: extraction stores metadata and skips
+            // the Claude API call entirely (AC-031, AC-058).
+            // ---------------------------------------------------------------
+            ExtractionResult extraction = null;
+            if (url != null && !url.isBlank()) {
+                extraction = contentExtractionService.extract(url);
+
+                // Store extracted metadata on the item record (thumbnail, platform, page text)
+                if (extraction.thumbnailUrl() != null) {
+                    item.setThumbnailUrl(extraction.thumbnailUrl());
+                }
+                if (extraction.platform() != null) {
+                    item.setPlatform(extraction.platform());
+                }
+                if (extraction.pageText() != null && !extraction.pageText().isBlank()) {
+                    item.setPageText(extraction.pageText());
+                }
+                // Title override: when extraction provides a more accurate title (e.g., YouTube oEmbed)
+                if (extraction.title() != null && !extraction.title().isBlank()) {
+                    item.setTitle(extraction.title());
+                }
+                // Persist extraction metadata to the item record immediately
+                itemRepository.save(item);
+                logger.info("Extraction metadata stored jobId={} itemId={} platform={} hasThumbnail={}",
+                        jobId, itemId, extraction.platform(), extraction.thumbnailUrl() != null);
+            }
+
+            // AC-031, AC-058: Skip Claude API for non-YouTube video items and YouTube
+            // items without a transcript. summarySkipped=true means summary stays null.
+            if (extraction != null && extraction.summarySkipped()) {
+                logger.info("Skipping Claude API — summarySkipped=true jobId={} itemId={} platform={}",
+                        jobId, itemId, extraction.platform());
+                job.setStatus(JobStatus.COMPLETED);
+                jobRepository.save(job);
+                return;
+            }
+
             // Load user's existing categories for prompt context (MOD-001 dependency)
             List<String> existingCategories = loadUserCategoryNames(userId);
 
@@ -161,8 +207,18 @@ public class ContentAnalysisService {
                 logger.info("Cache hit for URL analysis jobId={} itemId={} url={}", jobId, itemId, url);
             } else {
                 // Cache miss — call Claude API (AC-007, AC-008)
-                // For NOTE items without a URL, analyze the note body text
-                String textToAnalyze = (item.getNoteBody() != null) ? item.getNoteBody() : null;
+                // Determine the text to analyze:
+                //   - For URL-based items: use pageText from MOD-004 extraction
+                //   - For NOTE items: use noteBody
+                //   - Fallback: null (Claude analyzes based on title + URL only)
+                String textToAnalyze;
+                if (extraction != null && extraction.pageText() != null && !extraction.pageText().isBlank()) {
+                    textToAnalyze = extraction.pageText();
+                } else if (item.getPageText() != null && !item.getPageText().isBlank()) {
+                    textToAnalyze = item.getPageText();
+                } else {
+                    textToAnalyze = item.getNoteBody();
+                }
                 result = claudeApiClient.analyze(title, url, textToAnalyze, existingCategories);
 
                 // Write result to cache (only for URL-based items — cache key is the URL)

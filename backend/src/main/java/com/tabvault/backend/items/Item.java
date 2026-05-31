@@ -73,6 +73,20 @@ public class Item {
     @Column(name = "note_body", columnDefinition = "TEXT")
     private String noteBody;
 
+    // Populated by MOD-004 (content extraction) before the LLM analysis is called.
+    // Contains extracted readable text from article HTML, PDF, or YouTube transcript.
+    @Column(name = "page_text", columnDefinition = "TEXT")
+    private String pageText;
+
+    // Populated by MOD-004 for video items (YouTube oEmbed URL or og:image thumbnail).
+    @Column(name = "thumbnail_url", columnDefinition = "TEXT")
+    private String thumbnailUrl;
+
+    // Populated by MOD-004 for video items: "youtube", "instagram", or "tiktok".
+    // NULL for article and PDF items.
+    @Column(name = "platform", length = 50)
+    private String platform;
+
     @Column(name = "is_pinned", nullable = false)
     private boolean pinned;
 
@@ -193,6 +207,30 @@ public class Item {
 
     public void setNoteBody(String noteBody) {
         this.noteBody = noteBody;
+    }
+
+    public String getPageText() {
+        return pageText;
+    }
+
+    public void setPageText(String pageText) {
+        this.pageText = pageText;
+    }
+
+    public String getThumbnailUrl() {
+        return thumbnailUrl;
+    }
+
+    public void setThumbnailUrl(String thumbnailUrl) {
+        this.thumbnailUrl = thumbnailUrl;
+    }
+
+    public String getPlatform() {
+        return platform;
+    }
+
+    public void setPlatform(String platform) {
+        this.platform = platform;
     }
 
     public boolean isPinned() {

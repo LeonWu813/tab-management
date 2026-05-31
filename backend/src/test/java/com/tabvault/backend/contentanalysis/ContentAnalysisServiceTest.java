@@ -1,5 +1,7 @@
 package com.tabvault.backend.contentanalysis;
 
+import com.tabvault.backend.contentextraction.ContentExtractionService;
+import com.tabvault.backend.contentextraction.ExtractionResult;
 import com.tabvault.backend.items.Category;
 import com.tabvault.backend.items.CategoryRepository;
 import com.tabvault.backend.items.ContentAnalysisJob;
@@ -25,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -62,6 +65,9 @@ class ContentAnalysisServiceTest {
     @Mock
     private AnalysisCacheService analysisCacheService;
 
+    @Mock
+    private ContentExtractionService contentExtractionService;
+
     private ContentAnalysisService service;
 
     @BeforeEach
@@ -72,8 +78,17 @@ class ContentAnalysisServiceTest {
                 categoryRepository,
                 reminderRepository,
                 claudeApiClient,
-                analysisCacheService
+                analysisCacheService,
+                contentExtractionService
         );
+
+        // Default stub: extraction returns an article result with no metadata override.
+        // summarySkipped=false so existing tests flow through to the Claude API call.
+        // Individual tests that need different extraction behavior override this stub.
+        // lenient() prevents UnnecessaryStubbing errors in tests that never call extract().
+        org.mockito.Mockito.lenient()
+                .when(contentExtractionService.extract(anyString()))
+                .thenReturn(ExtractionResult.forArticle("extracted article text"));
     }
 
     // -------------------------------------------------------------------------
@@ -393,5 +408,148 @@ class ContentAnalysisServiceTest {
         @SuppressWarnings("unchecked")
         List<String> passedCategories = (List<String>) categoriesCaptor.getValue();
         assertThat(passedCategories).containsExactly("Work", "Research");
+    }
+
+    // -------------------------------------------------------------------------
+    // MOD-004 integration: Content extraction before Claude API call
+    // -------------------------------------------------------------------------
+
+    @Test
+    void processJob_whenExtractionReturnsPageText_passesTextToClaudeApi() {
+        Item item = makeLinkItem(1L, 10L, "https://example.com/article", "Article Title");
+        ContentAnalysisJob job = makeJob(100L, 1L, 0, JobStatus.PENDING);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(categoryRepository.findByUserIdOrderBySortOrderAscCreatedAtAsc(10L)).thenReturn(List.of());
+        when(analysisCacheService.get(anyString())).thenReturn(Optional.empty());
+
+        // Extraction returns article text
+        when(contentExtractionService.extract("https://example.com/article"))
+                .thenReturn(ExtractionResult.forArticle("Extracted article body text"));
+
+        AnalysisResult result = new AnalysisResult("Summary", "Tech", "article", List.of());
+        ArgumentCaptor<String> pageTextCaptor = ArgumentCaptor.forClass(String.class);
+        when(claudeApiClient.analyze(anyString(), anyString(), pageTextCaptor.capture(), any()))
+                .thenReturn(result);
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.processJob(job);
+
+        // MOD-004: extracted page text is passed to Claude API
+        assertThat(pageTextCaptor.getValue()).isEqualTo("Extracted article body text");
+        verify(claudeApiClient, times(1)).analyze(anyString(), anyString(), anyString(), any());
+    }
+
+    @Test
+    void processJob_whenExtractionSummarySkipped_skipsClaudeApiAndCompletesJob() {
+        // AC-031: non-YouTube video items (Instagram, TikTok) → summarySkipped=true
+        Item item = makeLinkItem(1L, 10L, "https://www.instagram.com/reel/ABC123/", "Instagram Reel");
+        ContentAnalysisJob job = makeJob(100L, 1L, 0, JobStatus.PENDING);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Extraction returns metadata-only result with summarySkipped=true
+        when(contentExtractionService.extract("https://www.instagram.com/reel/ABC123/"))
+                .thenReturn(ExtractionResult.forVideoMetadataOnly(
+                        "https://img.example.com/reel.jpg", "Reel Title", "instagram"));
+
+        service.processJob(job);
+
+        // AC-031: Claude API must NOT be called for non-YouTube video items
+        verify(claudeApiClient, never()).analyze(anyString(), anyString(), any(), any());
+        // Job must still be marked COMPLETED
+        assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
+    void processJob_whenYouTubeTranscriptUnavailable_skipsClaudeAndKeepsSummaryNull() {
+        // AC-058: YouTube item without transcript → summarySkipped=true; summary stays null
+        Item item = makeLinkItem(1L, 10L, "https://www.youtube.com/watch?v=abc123def45", "YouTube Video");
+        ContentAnalysisJob job = makeJob(100L, 1L, 0, JobStatus.PENDING);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Extraction: YouTube without transcript → summarySkipped=true
+        when(contentExtractionService.extract("https://www.youtube.com/watch?v=abc123def45"))
+                .thenReturn(ExtractionResult.forYouTubeWithoutTranscript(
+                        "https://img.youtube.com/vi/abc123def45/0.jpg", "YouTube Video Title"));
+
+        service.processJob(job);
+
+        // AC-058: Claude NOT called; job COMPLETED; summary remains null on item
+        verify(claudeApiClient, never()).analyze(anyString(), anyString(), any(), any());
+        assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
+        // Summary field never set — item.getSummary() remains null
+        assertThat(item.getSummary()).isNull();
+    }
+
+    @Test
+    void processJob_whenYouTubeTranscriptAvailable_passesTranscriptToClaudeApi() {
+        // AC-029: YouTube with transcript → summarySkipped=false; transcript passed to Claude
+        Item item = makeLinkItem(1L, 10L, "https://www.youtube.com/watch?v=abc123def45", "YouTube Video");
+        ContentAnalysisJob job = makeJob(100L, 1L, 0, JobStatus.PENDING);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(categoryRepository.findByUserIdOrderBySortOrderAscCreatedAtAsc(10L)).thenReturn(List.of());
+        when(analysisCacheService.get(anyString())).thenReturn(Optional.empty());
+        when(jobRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(itemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        // Extraction: YouTube with transcript
+        when(contentExtractionService.extract("https://www.youtube.com/watch?v=abc123def45"))
+                .thenReturn(ExtractionResult.forYouTubeWithTranscript(
+                        "Full video transcript text", "https://thumbnail.url/img.jpg", "Video Title"));
+
+        AnalysisResult result = new AnalysisResult("Video summary", "Technology", "video", List.of());
+        ArgumentCaptor<String> textCaptor = ArgumentCaptor.forClass(String.class);
+        when(claudeApiClient.analyze(anyString(), anyString(), textCaptor.capture(), any()))
+                .thenReturn(result);
+
+        service.processJob(job);
+
+        // AC-029: transcript text passed to Claude API
+        assertThat(textCaptor.getValue()).isEqualTo("Full video transcript text");
+        verify(claudeApiClient, times(1)).analyze(anyString(), anyString(), anyString(), any());
+        assertThat(job.getStatus()).isEqualTo(JobStatus.COMPLETED);
+    }
+
+    @Test
+    void processJob_whenExtractionStoresThumbnail_thumbnailSavedOnItemRecord() {
+        // AC-030: thumbnailUrl and platform stored on item record for YouTube items
+        Item item = makeLinkItem(1L, 10L, "https://www.youtube.com/watch?v=abc123def45", "YouTube Video");
+        ContentAnalysisJob job = makeJob(100L, 1L, 0, JobStatus.PENDING);
+
+        when(itemRepository.findById(1L)).thenReturn(Optional.of(item));
+        when(categoryRepository.findByUserIdOrderBySortOrderAscCreatedAtAsc(10L)).thenReturn(List.of());
+        when(analysisCacheService.get(anyString())).thenReturn(Optional.empty());
+
+        String expectedThumbnail = "https://img.youtube.com/vi/abc123def45/0.jpg";
+        when(contentExtractionService.extract("https://www.youtube.com/watch?v=abc123def45"))
+                .thenReturn(ExtractionResult.forYouTubeWithTranscript(
+                        "Transcript text", expectedThumbnail, "Video Title"));
+
+        AnalysisResult result = new AnalysisResult("Summary", "Tech", "video", List.of());
+        when(claudeApiClient.analyze(anyString(), anyString(), any(), any())).thenReturn(result);
+
+        ArgumentCaptor<Item> itemCaptor = ArgumentCaptor.forClass(Item.class);
+        when(jobRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(itemRepository.save(itemCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.processJob(job);
+
+        // AC-030: thumbnailUrl and platform stored on item record
+        // The first save is the extraction metadata save; verify at least one save has the thumbnail set
+        boolean thumbnailSet = itemCaptor.getAllValues().stream()
+                .anyMatch(i -> expectedThumbnail.equals(i.getThumbnailUrl()));
+        assertThat(thumbnailSet).isTrue();
+
+        boolean platformSet = itemCaptor.getAllValues().stream()
+                .anyMatch(i -> "youtube".equals(i.getPlatform()));
+        assertThat(platformSet).isTrue();
     }
 }
