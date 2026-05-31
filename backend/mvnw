@@ -1,0 +1,20 @@
+#!/bin/sh
+# Maven wrapper script
+# This script downloads Maven if not present and runs it.
+
+MAVEN_WRAPPER_JAR=".mvn/wrapper/maven-wrapper.jar"
+MAVEN_WRAPPER_PROPERTIES=".mvn/wrapper/maven-wrapper.properties"
+
+# Find java executable
+if [ -n "$JAVA_HOME" ]; then
+    JAVACMD="$JAVA_HOME/bin/java"
+else
+    JAVACMD="java"
+fi
+
+if ! command -v "$JAVACMD" > /dev/null 2>&1; then
+    echo "Error: JAVA_HOME is not set and no 'java' command could be found in your PATH." >&2
+    exit 1
+fi
+
+exec "$JAVACMD" -jar "$MAVEN_WRAPPER_JAR" "$@"

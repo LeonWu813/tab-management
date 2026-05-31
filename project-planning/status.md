@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: doc-sync
-mode: trivial
-module: n/a
+agent: engineer-mod-auth
+mode: implement
+module: mod-auth
 result: success
-commit: 2c013cc476e15a0c85f704ce58b6a20f17cd8ac6
-timestamp: 2026-05-30T09:00:00Z
+commit: a6344d52aa4aa8fa6ad550d0e644f720dfe582d0
+timestamp: 2026-05-30T17:35:00Z
 
 ## Current Phase
 
@@ -246,3 +246,7 @@ PM agent may now tag [INIT].
 Pattern: Chrome Extension Manifest V3 service worker token storage and refresh — ephemeral service worker lifecycle requires chrome.storage.local persistence and explicit re-authentication triggers rather than in-memory token state.
 Why: MV3 service worker token handling is a recurring failure point in Chrome Extension projects. A codified pattern covering storage strategy, refresh triggering, and popup re-auth flow would prevent this from being re-solved per project.
 Agent: tech-lead
+
+Pattern: Mockito subclass mock maker required for Java 21+ / Java 25 — ByteBuddy's inline mock maker cannot resolve Java 25's class file version; configure `mock-maker-subclass` via `src/test/resources/mockito-extensions/org.mockito.plugins.MockMaker` and pin Mockito to 5.14+ in pom.xml.
+Why: Spring Boot 3.3.x ships a Mockito version whose ByteBuddy dependency does not support Java 25. This silently causes all @Mock-annotated tests to fail at startup with "Unknown Java version: 0". The subclass mock maker avoids bytecode instrumentation entirely and works on all Java versions.
+Agent: engineer-mod-auth
