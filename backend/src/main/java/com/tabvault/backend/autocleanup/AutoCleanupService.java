@@ -132,8 +132,14 @@ public class AutoCleanupService {
             return new CleanupResult(0, 0);
         }
 
-        int remindersCreated = createStalenessReminders(userId, settings.getStalenessThresholdDays());
+        // AC-034 runs first: archive items whose grace period has elapsed.
+        // Items archived here are excluded from the staleness reminder pass below because
+        // findStaleItemsForUser filters is_archived = FALSE, preventing a dangling PENDING
+        // reminder from being created for an item that is archived in the same job run.
         int itemsArchived = archiveItemsPassedGracePeriod(userId);
+
+        // AC-033 runs second: create staleness reminders only for items that are still active.
+        int remindersCreated = createStalenessReminders(userId, settings.getStalenessThresholdDays());
 
         logger.info("Auto-cleanup processed userId={} remindersCreated={} itemsArchived={}",
                 userId, remindersCreated, itemsArchived);

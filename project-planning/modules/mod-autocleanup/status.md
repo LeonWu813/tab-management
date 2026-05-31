@@ -2,6 +2,41 @@
 
 ## Engineering Progress
 
+**Bugfix: 2026-05-31 — BUG-001 (AC-033/AC-034 execution order)**
+
+### Bugfix Summary
+
+Fixed the wrong execution order in `AutoCleanupService.processUserCleanup(userId)` (BUG-001 reported by QA).
+
+**Change:** In `processUserCleanup`, swapped the call order so `archiveItemsPassedGracePeriod` runs BEFORE `createStalenessReminders`.
+
+**Root cause:** With the previous order, an item past its grace period (DISMISSED reminder, not visited after dismissal) would have `createStalenessReminders` run first — seeing `is_archived=FALSE` — and create a new PENDING reminder. Then `archiveItemsPassedGracePeriod` would correctly archive the item, leaving a dangling PENDING reminder on the now-archived item.
+
+**Fix:** Running archival first ensures that by the time `createStalenessReminders` calls `findStaleItemsForUser`, the just-archived item is already `is_archived=TRUE` and is filtered out of the query result, so no spurious PENDING reminder is created.
+
+**File changed:** `backend/src/main/java/com/tabvault/backend/autocleanup/AutoCleanupService.java` — lines 135-142 only; no other files modified.
+
+### Bugfix Self-Check Results (2026-05-31)
+
+**Automated checks (self-check.sh):**
+- Build: SKIP — no build command in production.md Build Config
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: PASS — `mvn test` exits 0; 197/197 tests pass, 0 failures, 0 errors
+- Git scope: FLAGGED (known false positive) — script flagged 2 files:
+  - `AutoCleanupService.java` — this is the module file being fixed; it is inside the autocleanup package boundary (script false positive)
+  - `project-planning/modules/mod-content-analysis/status.md` — pre-existing unstaged modification from a prior QA agent run; NOT touched by this bugfix and NOT staged
+
+**Judgment-based items:**
+- BUG-001 fix implemented correctly: PASS — `archiveItemsPassedGracePeriod` now runs before `createStalenessReminders` in `processUserCleanup`
+- AC-033 and AC-034 still satisfied: PASS — archival behavior unchanged; staleness reminders still created for all non-archived stale items
+- No other spec requirements affected by the order swap: PASS — all other methods are independent
+- No hardcoded values introduced: PASS — no new constants or config values
+- Code conventions followed: PASS — explanatory comments added above each call explaining the ordering rationale
+- No new dependencies: PASS
+- All 197 tests pass: PASS
+
+---
+
 **Completed: 2026-05-30**
 
 ### Implementation Summary
