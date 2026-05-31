@@ -1,4 +1,4 @@
-**Last Synced from PRD Revision**: 2 | **Last Updated**: 2026-05-30
+**Last Synced from PRD Revision**: 3 | **Last Updated**: 2026-05-30
 
 ---
 
@@ -18,6 +18,8 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 | Server state management | TanStack React Query 5 | Server data fetching and cache management in the PWA |
 | CSS framework | Tailwind CSS 3 | Utility-first styling; no CSS modules or styled-components |
 | Frontend form validation | Zod 3 | Client-side schema validation |
+| JavaScript runtime | Node.js 24.x LTS | Active LTS; required for Vite 5 and all frontend tooling |
+| Package manager | npm 11.x | Ships with Node.js 24 LTS |
 | Backend language | Java 21 | LTS release |
 | Backend framework | Spring Boot 3.3 | Web, Security, Data JPA, Validation, WebClient modules |
 | ORM | Spring Data JPA (Hibernate 6) + Flyway 10 | Repository pattern; database schema migrations via Flyway |
