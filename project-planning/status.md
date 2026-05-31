@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-reminder-service
-mode: bugfix
+agent: qa-mod-reminder-service
+mode: regression
 module: mod-reminder-service
-result: success
-commit: aa99cffe32cae725b0adf66c3b5317a60d1a4e04
-timestamp: 2026-05-31T17:00:00Z
+result: bugs-found
+commit: 897fd94b5b8868029d8bddb29583079c23dfec56
+timestamp: 2026-05-31T17:05:00Z
 
 ## Current Phase
 
@@ -295,4 +295,8 @@ Agent: engineer-mod-reminder-service
 
 Pattern: Spring Boot Quartz JDBC auto-configuration is bypassed when a named quartzDS datasource is declared — when `spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS` is set in application.properties, Quartz's StdSchedulerFactory takes over datasource management and requires `driver`, `URL`, `user`, and `password` for that named datasource. Spring Boot's QuartzAutoConfiguration (which would otherwise share the application's primary DataSource automatically) is bypassed. If the quartzDS block is incomplete, Quartz throws `SchedulerException: Driver not specified for DataSource: quartzDS` and the server cannot start. Fix: remove the quartzDS datasource properties entirely and let Spring Boot's QuartzAutoConfiguration share the application's HikariCP DataSource automatically (the standard pattern for spring.quartz.job-store-type=jdbc).
 Why: QA Run 3 for MOD-005 found the server still cannot start after the cron fix. The quartzDS block was added during the Quartz JDBC implementation but is incomplete — only provider=hikaricp was specified, without driver/URL/user/password. This is the third consecutive startup failure in the same Quartz configuration block, each one hiding the next. Unit tests with in-memory Quartz do not exercise this code path.
+Agent: engineer-mod-reminder-service
+
+Pattern: Setting `spring.quartz.properties.org.quartz.jobStore.class` bypasses Spring Boot QuartzAutoConfiguration DataSource injection — when `org.quartz.jobStore.class` is specified via `spring.quartz.properties`, Quartz's `StdSchedulerFactory` takes over job store initialization natively and requires `org.quartz.jobStore.dataSource` to name a datasource. Spring Boot's `QuartzAutoConfiguration` normally injects the primary DataSource via `SchedulerFactoryBean.setDataSource()`, but this injection only occurs when the job store class is NOT overridden through native Quartz properties. Fix: remove `spring.quartz.properties.org.quartz.jobStore.class` entirely; `spring.quartz.job-store-type=jdbc` alone is sufficient and Spring Boot handles DataSource wiring automatically. The `QUARTZ_JOB_STORE_CLASS` env var and related `.env.example` entries are also dead configuration and should be removed.
+Why: QA Run 4 for MOD-005 found the server still cannot start after the quartzDS removal fix. The `jobStore.class` property was retained from the original Quartz JDBC implementation and continues to force the native StdSchedulerFactory path that requires a datasource name. This is the fourth consecutive Quartz startup failure — each fix has correctly addressed the immediate error while leaving the next layer exposed. The root cause in all four cases is the same: native Quartz properties overriding Spring Boot auto-configuration behavior.
 Agent: engineer-mod-reminder-service

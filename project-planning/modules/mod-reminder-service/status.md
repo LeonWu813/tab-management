@@ -559,3 +559,177 @@ Spring Boot's `QuartzAutoConfiguration` automatically provides the application's
 **FAIL AC-061:** Input=[Server startup with valid VAPID keys], Actual=[Server fails in Quartz context init before VapidConfig @PostConstruct runs], Expected=[Server starts and VAPID keys validated from env vars per spec]
 **FAIL AC-062:** Input=[Push service returns HTTP 410 Gone], Actual=[Server did not start; dispatch unreachable], Expected=[Push subscription deleted per spec]
 **FAIL AC-063:** Input=[Reminder dispatch for user with multiple subscriptions], Actual=[Server did not start; dispatch job not stored], Expected=[All active push subscriptions for user receive notification per spec]
+
+---
+
+## QA Run 4 — 2026-05-31 — Regression — quartzDS removal re-verification
+
+**Original bug being re-verified:** QA Run 3 REGRESSION FAIL — `BeanCreationException: Driver not specified for DataSource: quartzDS` — server cannot start.
+
+**Engineer fix applied:** Removed two lines from `application.properties`:
+- `spring.quartz.properties.org.quartz.jobStore.dataSource=quartzDS`
+- `spring.quartz.properties.org.quartz.dataSource.quartzDS.provider=hikaricp`
+
+**Infrastructure:** docker compose ps — tabvault-postgres postgres:16 Up 17 hours (healthy), tabvault-redis redis:7.2-alpine Up 17 hours (healthy). Both services healthy.
+
+---
+
+### Step 1: Automated test suite
+
+**Result: 171/171 PASS — no regressions in unit tests**
+
+Command: `/Users/tsan/.m2/wrapper/dists/apache-maven-3.9.12-bin/5nmfsn99br87k5d4ajlekdq10k/apache-maven-3.9.12/bin/mvn test` from `backend/`
+
+Output:
+```
+Tests run: 171, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+Total time: 6.960 s
+```
+
+Breakdown: 14 ReminderServiceTest + 12 ReminderControllerTest + 5 ReminderSchedulerTest = 31 MOD-005 tests; 140 pre-existing tests. All pass. Exit code 0.
+
+Note: The test suite uses in-memory Quartz (`spring.quartz.job-store-type=memory` in application-test.properties). Neither `QuartzAutoConfiguration` JDBC wiring nor `StdSchedulerFactory.instantiate()` is exercised by unit tests. Startup behavior can only be confirmed by live server launch.
+
+---
+
+### Step 2: Build — `mvn package -DskipTests`
+
+**Result: BUILD SUCCESS**
+
+Command: `/Users/tsan/.m2/wrapper/dists/apache-maven-3.9.12-bin/5nmfsn99br87k5d4ajlekdq10k/apache-maven-3.9.12/bin/mvn package -DskipTests` from `backend/`
+
+Output: `Building jar: backend/target/tabvault-backend-0.0.1-SNAPSHOT.jar` — exits 0 in 2.955 s.
+
+---
+
+### Step 3: application.properties quartzDS verification
+
+Confirmed: The two removed lines are no longer present. Full grep output:
+
+```
+grep -n "quartzDS\|quartz" backend/src/main/resources/application.properties
+75: spring.quartz.job-store-type=jdbc
+78: spring.quartz.jdbc.initialize-schema=never
+81: spring.quartz.properties.org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}
+84: spring.quartz.properties.org.quartz.jobStore.driverDelegateClass=org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+87: spring.quartz.properties.org.quartz.jobStore.tablePrefix=QRTZ_
+91: spring.quartz.properties.org.quartz.jobStore.isClustered=false
+94: spring.quartz.properties.org.quartz.scheduler.instanceName=TabVaultScheduler
+95: spring.quartz.properties.org.quartz.scheduler.instanceId=AUTO
+100: spring.quartz.overwrite-existing-jobs=true
+```
+
+No `quartzDS` lines remain. The QA Run 3 required fix is applied correctly.
+
+---
+
+### Step 4: Live server startup
+
+**REGRESSION FAIL: quartzDS lines removed but server still cannot start — new Quartz DataSource failure**
+
+**Confirmed fixed (QA Run 3 bug):** The `Driver not specified for DataSource: quartzDS` error is GONE. The quartzDS lines have been correctly removed.
+
+**New startup failure:**
+
+```
+org.springframework.beans.factory.BeanCreationException: Error creating bean with name
+  'quartzScheduler' defined in class path resource
+  [org/springframework/boot/autoconfigure/quartz/QuartzAutoConfiguration.class]:
+  DataSource name not set.
+...
+Caused by: org.quartz.SchedulerConfigException: DataSource name not set.
+  at org.quartz.impl.jdbcjobstore.JobStoreSupport.initialize(JobStoreSupport.java:643)
+  at org.quartz.impl.jdbcjobstore.JobStoreTX.initialize(JobStoreTX.java:57)
+  at org.quartz.impl.StdSchedulerFactory.instantiate(StdSchedulerFactory.java:1368)
+  at org.quartz.impl.StdSchedulerFactory.getScheduler(StdSchedulerFactory.java:1579)
+  at org.springframework.scheduling.quartz.SchedulerFactoryBean.createScheduler(...)
+```
+
+**Root cause:** `application.properties` still contains:
+```
+spring.quartz.properties.org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}
+```
+When `org.quartz.jobStore.class` is set via `spring.quartz.properties`, Quartz's native `StdSchedulerFactory.instantiate()` takes responsibility for initializing the job store class directly. `StdSchedulerFactory` reads all `spring.quartz.properties.*` as raw Quartz properties and passes them to the Quartz engine. In this code path, `JobStoreSupport.initialize()` requires `org.quartz.jobStore.dataSource` to be set — it will not fall back to Spring Boot's auto-configured DataSource. The QA Run 3 fix removed the incomplete `quartzDS` block, but the `jobStore.class` property that forces the `StdSchedulerFactory` path is still present.
+
+When `spring.quartz.job-store-type=jdbc` is set WITHOUT any `spring.quartz.properties.org.quartz.jobStore.class` override, Spring Boot's `QuartzAutoConfiguration` sets up the scheduler factory with the primary DataSource automatically via `SchedulerFactoryBean.setDataSource()`, and Quartz does not need `org.quartz.jobStore.dataSource` in its properties at all. The `jobStore.class` override bypasses this automatic DataSource injection.
+
+**Classification:** Implementation bug — this is a continued regression in the Quartz JDBC configuration. The QA Run 3 fix (removing quartzDS) was necessary but not sufficient. The remaining `jobStore.class` native Quartz property continues to force the `StdSchedulerFactory` path, which requires a datasource name that no longer exists.
+
+**Required fix:** Remove `spring.quartz.properties.org.quartz.jobStore.class` from `application.properties`. Spring Boot's `QuartzAutoConfiguration` automatically uses `JobStoreTX` as the job store class when `spring.quartz.job-store-type=jdbc` is configured — the explicit override is not needed and, when present, causes `StdSchedulerFactory` to take over datasource management outside of Spring Boot's control.
+
+After removing that line, the following properties in `application.properties` are sufficient for a functioning Quartz JDBC store:
+```properties
+spring.quartz.job-store-type=jdbc
+spring.quartz.jdbc.initialize-schema=never
+spring.quartz.properties.org.quartz.jobStore.driverDelegateClass=org.quartz.impl.jdbcjobstore.PostgreSQLDelegate
+spring.quartz.properties.org.quartz.jobStore.tablePrefix=QRTZ_
+spring.quartz.properties.org.quartz.jobStore.isClustered=false
+spring.quartz.properties.org.quartz.scheduler.instanceName=TabVaultScheduler
+spring.quartz.properties.org.quartz.scheduler.instanceId=AUTO
+spring.quartz.overwrite-existing-jobs=true
+```
+
+The `QUARTZ_JOB_STORE_CLASS` env var and its `@Value` / `.env.example` references can also be removed as they are no longer needed.
+
+**Impact:** Server cannot start at all. All 8 ACs are blocked. This is the fourth consecutive startup failure in the Quartz JDBC configuration block. The unit test suite has never exercised `QuartzAutoConfiguration` or `StdSchedulerFactory.instantiate()` because the test profile uses `spring.quartz.job-store-type=memory`. Every live server startup reveals the next layer of the same root problem: native Quartz properties interfering with Spring Boot auto-configuration.
+
+---
+
+### Step 5: Quartz tables check (qrtz_*)
+
+**DEFERRED** — server did not reach running state. From prior runs it is known that Flyway V11 migration has already applied the `qrtz_*` DDL (logged as `Current version of schema "public": 11`). Table verification will be completed when the server successfully starts.
+
+---
+
+### Step 6: qrtz_cron_triggers check
+
+**DEFERRED** — Quartz scheduler did not start; trigger was not stored. Will be verified once the server starts.
+
+---
+
+### Re-verification status of all 8 ACs
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-021 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-022 | REGRESSION FAIL | Quartz StdSchedulerFactory SchedulerConfigException: DataSource name not set |
+| AC-023 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-024 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-060 | REGRESSION FAIL | Server did not start; endpoint unreachable |
+| AC-061 | REGRESSION FAIL | Server did not start before VapidConfig @PostConstruct runs |
+| AC-062 | REGRESSION FAIL | Server did not start; dispatch job unreachable |
+| AC-063 | REGRESSION FAIL | Server did not start; dispatch job unreachable |
+
+---
+
+### QA Run 4 summary
+
+**REGRESSION PASS (partial):** QA Run 3 bug — `Driver not specified for DataSource: quartzDS` — is confirmed fixed. The quartzDS lines are verified absent from `application.properties`.
+
+**NEW REGRESSION (implementation bug): `spring.quartz.properties.org.quartz.jobStore.class` forces StdSchedulerFactory path — DataSource not wired**
+
+Routing: Engineer
+
+Classification: Implementation bug. The `spring.quartz.properties.org.quartz.jobStore.class` property forces Quartz's `StdSchedulerFactory` to initialize the job store natively, bypassing Spring Boot `QuartzAutoConfiguration`'s automatic DataSource injection. When that native path is taken and no `org.quartz.jobStore.dataSource` is named (the quartzDS lines were correctly removed), `JobStoreSupport.initialize()` throws `SchedulerConfigException: DataSource name not set`.
+
+Exact error:
+```
+org.quartz.SchedulerConfigException: DataSource name not set.
+  at org.quartz.impl.jdbcjobstore.JobStoreSupport.initialize(JobStoreSupport.java:643)
+```
+
+Required fix: Remove this one line from `backend/src/main/resources/application.properties`:
+```
+spring.quartz.properties.org.quartz.jobStore.class=${QUARTZ_JOB_STORE_CLASS:org.quartz.impl.jdbcjobstore.JobStoreTX}
+```
+Spring Boot's `QuartzAutoConfiguration` automatically uses `JobStoreTX` when `spring.quartz.job-store-type=jdbc` — this property is not needed and is actively harmful. The `QUARTZ_JOB_STORE_CLASS` env var, its `@Value` fallback in `QuartzConfig.java` (if referenced), and its entry in `.env.example` can also be removed as dead configuration.
+
+**FAIL AC-021:** Input=[POST /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with reminder record per spec]
+**FAIL AC-022:** Input=[Quartz JDBC scheduler startup], Actual=[SchedulerConfigException: DataSource name not set — StdSchedulerFactory path bypasses Spring Boot DataSource injection], Expected=[Quartz scheduler starts, CronTrigger stored in JDBC store per production.md Shared Convention]
+**FAIL AC-023:** Input=[PATCH /api/reminders/{id} with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with updated reminder record per spec]
+**FAIL AC-024:** Input=[GET /api/reminders with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 200 with dueWithin24Hours badge flag per spec]
+**FAIL AC-060:** Input=[POST /api/push-subscriptions with valid JWT], Actual=[HTTP connection refused — server did not start], Expected=[HTTP 201 with push subscription record per spec]
+**FAIL AC-061:** Input=[Server startup with valid VAPID keys], Actual=[Server fails in Quartz context init before VapidConfig @PostConstruct runs], Expected=[Server starts and VAPID keys validated from env vars per spec]
+**FAIL AC-062:** Input=[Push service returns HTTP 410 Gone], Actual=[Server did not start; dispatch unreachable], Expected=[Push subscription deleted per spec]
+**FAIL AC-063:** Input=[Reminder dispatch for user with multiple subscriptions], Actual=[Server did not start; dispatch job not stored], Expected=[All active push subscriptions for user receive notification per spec]
