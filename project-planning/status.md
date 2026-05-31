@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: adb230e5c0c6a95bd890681896b57f31e7085df8
-timestamp: 2026-05-30T18:00:00Z
+commit: faee96f487c9cfe936b93022e519b337bdfeb80b
+timestamp: 2026-05-30T18:10:00Z
 
 ## Current Phase
 
@@ -217,6 +217,18 @@ PM agent may now tag [INIT].
 **AMBIGUITY markers resolved:** none
 **CONFLICT markers added:** none
 **Note:** No module specs required update. Neither MOD-007 nor any other module spec contained Node.js or npm version strings — the wording change is fully contained in the Tech Stack table, which maps only to production.md. verify-sync.sh skipped per trivial passthrough rules.
+
+### Sync Report — Trivial Sync — 2026-05-30
+**Sync type:** trivial
+**PM Update reference:** 2026-05-30 — [TRIVIAL] MOD-001 spec gap logged (QA escalation): add "displayName: required string" to registration Input line
+**Files modified:**
+- project-planning/modules/mod-auth/spec.md — Input/Output Contract, registration Input line: appended ", displayName: required string" to "valid email address, password of at least 8 characters"
+**Files created:** none
+**Module removals noted:** none
+**AMBIGUITY markers added:** none
+**AMBIGUITY markers resolved:** none
+**CONFLICT markers added:** none
+**Note:** Spec omission only. PRD (AC-044), implementation, and output contract were all already correct. No other module specs, production.md, or agent wrappers required update. verify-sync.sh skipped per trivial passthrough rules.
 
 ## Engineering Progress
 

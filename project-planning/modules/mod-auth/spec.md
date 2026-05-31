@@ -41,7 +41,7 @@ Enable users to save any browser tab in one action (click or keyboard shortcut) 
 
 **Input:**
 
-- Registration endpoint: valid email address, password of at least 8 characters
+- Registration endpoint: valid email address, password of at least 8 characters, displayName: required string
 - Login endpoint: email address, password
 - Token refresh endpoint: valid refresh token
 
