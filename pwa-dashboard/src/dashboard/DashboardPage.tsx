@@ -1,0 +1,303 @@
+/**
+ * Main dashboard page.
+ *
+ * AC-014: Displays only items matching active filter criteria.
+ * AC-015: Returns search results within 3 seconds (search is debounced 300ms; backend handles query).
+ * AC-016: Grid/list toggle with persisted view preference.
+ * AC-017: Inline category editing on item cards.
+ */
+import { useState, useEffect } from 'react';
+import { useItems, useCategories, useRecordVisit } from './use-items';
+import { useViewPreference } from './use-view-preference';
+import ItemCard from './ItemCard';
+import CreateNoteModal from './CreateNoteModal';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '../api/api-client';
+import type { ReminderResponse } from '../api/types';
+
+const DEBOUNCE_DELAY_MS = 300;
+
+/**
+ * Returns a debounced copy of the value that only updates after `delay` ms
+ * of no change. Used to avoid firing a search API call on every keystroke.
+ */
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(timer);
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
+const CONTENT_TYPE_OPTIONS = [
+  { value: '', label: 'All types' },
+  { value: 'LINK', label: 'Links' },
+  { value: 'NOTE', label: 'Notes' },
+  { value: 'VIDEO', label: 'Videos' },
+];
+
+export default function DashboardPage() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedItemType, setSelectedItemType] = useState<string>('');
+  const [currentPage, setCurrentPage] = useState(0);
+  const [viewMode, setViewMode] = useViewPreference();
+  const [showCreateNote, setShowCreateNote] = useState(false);
+
+  const debouncedQuery = useDebounce(searchQuery, DEBOUNCE_DELAY_MS);
+
+  const { data: categoriesData } = useCategories();
+  const categories = categoriesData ?? [];
+
+  const { data: remindersData } = useQuery<ReminderResponse[]>({
+    queryKey: ['reminders'],
+    queryFn: () => apiRequest<ReminderResponse[]>('/api/reminders'),
+  });
+  const reminders = remindersData ?? [];
+
+  const { data: itemsPage, isLoading, isError } = useItems({
+    query: debouncedQuery || undefined,
+    page: currentPage,
+    pageSize: 20,
+  });
+
+  const recordVisit = useRecordVisit();
+
+  // Client-side filter by category and item type (AC-014)
+  const allItems = itemsPage?.content ?? [];
+  const filteredItems = allItems.filter((item) => {
+    if (selectedCategoryId !== null && item.categoryId !== selectedCategoryId) return false;
+    if (selectedItemType && item.itemType !== selectedItemType) return false;
+    return true;
+  });
+
+  function handleSearchChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setSearchQuery(event.target.value);
+    setCurrentPage(0);
+  }
+
+  function handleCategoryFilter(event: React.ChangeEvent<HTMLSelectElement>) {
+    const value = event.target.value;
+    setSelectedCategoryId(value === '' ? null : parseInt(value, 10));
+    setCurrentPage(0);
+  }
+
+  function handleItemTypeFilter(event: React.ChangeEvent<HTMLSelectElement>) {
+    setSelectedItemType(event.target.value);
+    setCurrentPage(0);
+  }
+
+  return (
+    <div className="pb-20 sm:pb-6 space-y-5">
+      {/* Header and actions */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h1 className="text-xl font-semibold text-gray-900">Saved Items</h1>
+        <button
+          onClick={() => setShowCreateNote(true)}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+          aria-label="Create a new note"
+        >
+          + New note
+        </button>
+      </div>
+
+      {/* Search and filter controls */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        {/* Search box — AC-015: results within 3 seconds (debounced 300ms + fast backend) */}
+        <div className="flex-1">
+          <label htmlFor="search-input" className="sr-only">
+            Search saved items
+          </label>
+          <input
+            id="search-input"
+            type="search"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Search titles, summaries, notes..."
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Search saved items"
+          />
+        </div>
+
+        {/* Category filter — AC-014 */}
+        <div>
+          <label htmlFor="category-filter" className="sr-only">
+            Filter by category
+          </label>
+          <select
+            id="category-filter"
+            value={selectedCategoryId?.toString() ?? ''}
+            onChange={handleCategoryFilter}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Filter by category"
+          >
+            <option value="">All categories</option>
+            {categories.map((cat) => (
+              <option key={cat.id} value={cat.id.toString()}>
+                {cat.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Content type filter — AC-014 */}
+        <div>
+          <label htmlFor="type-filter" className="sr-only">
+            Filter by content type
+          </label>
+          <select
+            id="type-filter"
+            value={selectedItemType}
+            onChange={handleItemTypeFilter}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Filter by content type"
+          >
+            {CONTENT_TYPE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Grid/list toggle — AC-016 */}
+        <div className="flex rounded-lg border border-gray-300 overflow-hidden" role="group" aria-label="View mode">
+          <button
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-2 text-sm transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+            aria-pressed={viewMode === 'grid'}
+            aria-label="Grid view"
+          >
+            ⊞ Grid
+          </button>
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-3 py-2 text-sm transition-colors ${
+              viewMode === 'list'
+                ? 'bg-blue-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-50'
+            }`}
+            aria-pressed={viewMode === 'list'}
+            aria-label="List view"
+          >
+            ☰ List
+          </button>
+        </div>
+      </div>
+
+      {/* Active filter indicators */}
+      {(selectedCategoryId !== null || selectedItemType) && (
+        <div className="flex items-center gap-2 flex-wrap text-sm">
+          <span className="text-gray-500">Filters:</span>
+          {selectedCategoryId !== null && (
+            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+              {categories.find((c) => c.id === selectedCategoryId)?.name ?? 'Category'}
+              <button
+                onClick={() => setSelectedCategoryId(null)}
+                className="ml-1 hover:text-blue-900"
+                aria-label="Remove category filter"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+          {selectedItemType && (
+            <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-xs">
+              {CONTENT_TYPE_OPTIONS.find((o) => o.value === selectedItemType)?.label}
+              <button
+                onClick={() => setSelectedItemType('')}
+                className="ml-1 hover:text-purple-900"
+                aria-label="Remove type filter"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Results */}
+      {isLoading && (
+        <div className="text-center py-12 text-gray-400">Loading...</div>
+      )}
+
+      {isError && (
+        <div className="text-center py-12">
+          <p className="text-red-600 text-sm">Failed to load items.</p>
+          {!navigator.onLine && (
+            <p className="text-gray-500 text-sm mt-1">
+              You are offline. Showing cached data from your last visit.
+            </p>
+          )}
+        </div>
+      )}
+
+      {!isLoading && !isError && filteredItems.length === 0 && (
+        <div className="text-center py-12 text-gray-400">
+          {debouncedQuery || selectedCategoryId !== null || selectedItemType
+            ? 'No items match your search or filters.'
+            : 'No saved items yet. Save a tab from the Chrome extension to get started.'}
+        </div>
+      )}
+
+      {/* Item grid or list */}
+      {!isLoading && filteredItems.length > 0 && (
+        <div
+          className={
+            viewMode === 'grid'
+              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+              : 'space-y-2'
+          }
+        >
+          {filteredItems.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              categories={categories}
+              reminders={reminders}
+              viewMode={viewMode}
+              onVisit={(itemId) => recordVisit.mutate(itemId)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {itemsPage && itemsPage.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 pt-4">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+            disabled={itemsPage.first}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+            aria-label="Previous page"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-gray-500">
+            Page {currentPage + 1} of {itemsPage.totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => p + 1)}
+            disabled={itemsPage.last}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+            aria-label="Next page"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Create note modal */}
+      {showCreateNote && (
+        <CreateNoteModal onClose={() => setShowCreateNote(false)} />
+      )}
+    </div>
+  );
+}
