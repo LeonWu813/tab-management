@@ -1,5 +1,6 @@
 package com.tabvault.backend.items;
 
+import com.tabvault.backend.shared.error.ApiErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ import java.util.List;
  *   GET    /api/items                             — list or search items (AC-027)
  *   GET    /api/items/{id}                        — get single item
  *   POST   /api/items/{id}/visit                  — update last_visited_at
+ *   PATCH  /api/items/{id}                        — partial update: title, summary, categoryId
  *   PATCH  /api/items/{id}/category               — reassign category (AC-020)
  *   POST   /api/categories                        — create category (AC-018)
  *   GET    /api/categories                        — list categories
@@ -154,6 +156,44 @@ public class ItemController {
 
         itemService.recordVisit(userId, id);
         return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * Partially updates an item's title, summary, and/or categoryId.
+     *
+     * Only fields present (non-null) in the request body are applied.
+     * At least one field must be provided — returns HTTP 400 if the body contains no
+     * non-null fields (i.e. all three keys are absent or all three are null).
+     *
+     * HTTP 200 — updated item record
+     * HTTP 400 — request body is empty / all fields are null
+     * HTTP 404 — item not found or belongs to a different user
+     *
+     * Used by MOD-008 PWA Dashboard for inline edit of title, summary, and category.
+     */
+    @Operation(summary = "Partially update an item's title, summary, and/or category")
+    @PatchMapping("/items/{id}")
+    public ResponseEntity<?> updateItem(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateItemRequest request) {
+
+        // True partial update: at least one field must be present (non-null).
+        // categoryId null is a valid value ("move to uncategorized"), so we cannot
+        // use a simple null check on all three fields. The rule is: at least one of
+        // title, summary, or categoryId must be present in the JSON body — but because
+        // Java records cannot distinguish "key absent" from "key present with null value",
+        // we enforce that the combined deserialized result must not have all three fields
+        // null, which covers the empty-body case and the all-null case.
+        if (request.title() == null && request.summary() == null && request.categoryId() == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiErrorResponse.of(
+                            "VALIDATION_ERROR",
+                            "At least one field (title, summary, categoryId) must be provided"));
+        }
+
+        ItemResponse response = itemService.updateItem(userId, id, request);
+        return ResponseEntity.ok(response);
     }
 
     /**

@@ -272,6 +272,145 @@ class ItemControllerTest {
     }
 
     // -------------------------------------------------------------------------
+    // PATCH /api/items/{id}
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("updateItem returns HTTP 200 with updated item when title is provided")
+    void updateItem_titleOnly_returns200WithUpdatedItem() throws Exception {
+        ItemResponse response = new ItemResponse(
+                10L, "LINK", "https://example.com", "Updated Title",
+                null, null, null, null, null, null, null, null,
+                false, false, null, OffsetDateTime.now());
+
+        when(itemService.updateItem(eq(USER_ID), eq(10L), any(UpdateItemRequest.class))).thenReturn(response);
+
+        String body = objectMapper.writeValueAsString(Map.of("title", "Updated Title"));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Updated Title"))
+                .andExpect(jsonPath("$.id").value(10));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 200 with updated item when summary is provided")
+    void updateItem_summaryOnly_returns200WithUpdatedItem() throws Exception {
+        ItemResponse response = new ItemResponse(
+                10L, "LINK", "https://example.com", "Example",
+                null, "New summary text", null, null, null, null, null, null,
+                false, false, null, OffsetDateTime.now());
+
+        when(itemService.updateItem(eq(USER_ID), eq(10L), any(UpdateItemRequest.class))).thenReturn(response);
+
+        String body = objectMapper.writeValueAsString(Map.of("summary", "New summary text"));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary").value("New summary text"));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 200 with updated item when categoryId is provided")
+    void updateItem_categoryIdOnly_returns200WithUpdatedItem() throws Exception {
+        ItemResponse response = new ItemResponse(
+                10L, "LINK", "https://example.com", "Example",
+                null, null, null, null, null, null, null, 5L,
+                false, false, null, OffsetDateTime.now());
+
+        when(itemService.updateItem(eq(USER_ID), eq(10L), any(UpdateItemRequest.class))).thenReturn(response);
+
+        String body = objectMapper.writeValueAsString(Map.of("categoryId", 5));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoryId").value(5));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 200 when all three fields are provided")
+    void updateItem_allFields_returns200() throws Exception {
+        ItemResponse response = new ItemResponse(
+                10L, "LINK", "https://example.com", "New Title",
+                null, "New summary", null, null, null, null, null, 3L,
+                false, false, null, OffsetDateTime.now());
+
+        when(itemService.updateItem(eq(USER_ID), eq(10L), any(UpdateItemRequest.class))).thenReturn(response);
+
+        String body = objectMapper.writeValueAsString(
+                Map.of("title", "New Title", "summary", "New summary", "categoryId", 3));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("New Title"))
+                .andExpect(jsonPath("$.summary").value("New summary"))
+                .andExpect(jsonPath("$.categoryId").value(3));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 400 when body is empty (all fields null)")
+    void updateItem_emptyBody_returns400() throws Exception {
+        // JSON body with all explicit nulls — service should not be called
+        String body = "{\"title\":null,\"summary\":null,\"categoryId\":null}";
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 400 when title exceeds 1000 characters")
+    void updateItem_titleTooLong_returns400() throws Exception {
+        String body = objectMapper.writeValueAsString(Map.of("title", "A".repeat(1001)));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 404 when item not found")
+    void updateItem_itemNotFound_returns404() throws Exception {
+        when(itemService.updateItem(eq(USER_ID), eq(999L), any(UpdateItemRequest.class)))
+                .thenThrow(new ItemNotFoundException("Item not found: 999"));
+
+        String body = objectMapper.writeValueAsString(Map.of("title", "Updated Title"));
+
+        mockMvc.perform(patch("/api/items/999")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("ITEM_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("updateItem returns HTTP 404 when category not found")
+    void updateItem_categoryNotFound_returns404() throws Exception {
+        when(itemService.updateItem(eq(USER_ID), eq(10L), any(UpdateItemRequest.class)))
+                .thenThrow(new CategoryNotFoundException("Category not found: 999"));
+
+        String body = objectMapper.writeValueAsString(Map.of("categoryId", 999));
+
+        mockMvc.perform(patch("/api/items/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error.code").value("CATEGORY_NOT_FOUND"));
+    }
+
+    // -------------------------------------------------------------------------
     // POST /api/categories
     // -------------------------------------------------------------------------
 

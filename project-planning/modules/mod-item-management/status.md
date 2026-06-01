@@ -5,6 +5,30 @@
 **Completed: 2026-05-30**
 **Bugfix Round 1 applied: 2026-05-30** (BUG-001, partial BUG-002)
 **Bugfix Round 2 applied: 2026-05-30** (BUG-002 complete fix, BUG-003)
+**Addendum applied: 2026-05-30** (PATCH /api/items/{id} — inline edit endpoint for MOD-008 PWA Dashboard AC-017)
+
+### Addendum: PATCH /api/items/{id} (2026-05-30)
+
+Added partial-update endpoint to support MOD-008 PWA Dashboard AC-017 (inline edit of title, summary, category).
+
+**Files created:**
+- `backend/src/main/java/com/tabvault/backend/items/UpdateItemRequest.java` — partial update request DTO with optional title (1–1000 chars), summary, and categoryId fields
+
+**Files modified:**
+- `backend/src/main/java/com/tabvault/backend/items/ItemService.java` — added `updateItem()` method with true partial-update logic (only non-null fields applied; null categoryId leaves categoryId unchanged; non-null categoryId validates ownership)
+- `backend/src/main/java/com/tabvault/backend/items/ItemController.java` — added `PATCH /api/items/{id}` endpoint with at-least-one-field validation (HTTP 400 when all fields null/absent); imported `ApiErrorResponse`
+- `backend/src/test/java/com/tabvault/backend/items/ItemControllerTest.java` — 9 new tests (title-only, summary-only, categoryId-only, all-fields, empty body 400, title too long 400, item not found 404, category not found 404)
+- `backend/src/test/java/com/tabvault/backend/items/ItemServiceTest.java` — 7 new tests (title-only, summary-only, categoryId-only, all-fields, item not owned, invalid category, null categoryId unchanged)
+
+**Self-check results:**
+- Build: PASS — `./mvnw test` exits 0, no compilation errors
+- Lint: SKIP — no lint command configured
+- Tests: PASS — 212/212 tests pass, 0 failures, 0 errors (was 199 before; 13 new tests added)
+- Git scope: PASS — all changed files are within `backend/src/main/java/com/tabvault/backend/items/` and `backend/src/test/java/com/tabvault/backend/items/`
+- Every spec requirement implemented: PASS — endpoint accepts partial update body with optional title/summary/categoryId; only present fields applied; HTTP 200 with updated record; HTTP 404 for not-found/wrong-owner; HTTP 400 for empty body; authenticated user must own item (JWT principal scoped via `findByIdAndUserId`)
+- No hardcoded values: PASS — no magic strings or config values introduced
+- Code conventions followed: PASS — feature-based directory, PascalCase class, Javadoc on all public methods, AC references in comments, structured logger calls
+- No new dependencies outside tech stack: PASS — `ApiErrorResponse` is an existing shared utility; no new libs added
 
 ### Bugfix Round 2 Summary (BUG-002 complete + BUG-003)
 

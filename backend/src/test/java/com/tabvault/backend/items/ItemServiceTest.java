@@ -249,6 +249,134 @@ class ItemServiceTest {
     }
 
     // -------------------------------------------------------------------------
+    // updateItem
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("updateItem applies title when title is non-null and leaves other fields unchanged")
+    void updateItem_titleOnly_updatesTitleOnly() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Original Title", null);
+        item.setSummary("Original summary");
+        item.setCategoryId(3L);
+        UpdateItemRequest request = new UpdateItemRequest("New Title", null, null);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemResponse response = itemService.updateItem(userId, itemId, request);
+
+        assertThat(response.title()).isEqualTo("New Title");
+        assertThat(response.summary()).isEqualTo("Original summary");
+        assertThat(response.categoryId()).isEqualTo(3L);
+        verify(categoryRepository, never()).existsByIdAndUserId(anyLong(), anyLong());
+    }
+
+    @Test
+    @DisplayName("updateItem applies summary when summary is non-null")
+    void updateItem_summaryOnly_updatesSummaryOnly() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Title", null);
+        UpdateItemRequest request = new UpdateItemRequest(null, "New summary", null);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemResponse response = itemService.updateItem(userId, itemId, request);
+
+        assertThat(response.summary()).isEqualTo("New summary");
+        assertThat(response.title()).isEqualTo("Title");
+    }
+
+    @Test
+    @DisplayName("updateItem applies categoryId when categoryId is non-null and category belongs to user")
+    void updateItem_categoryIdOnly_updatesCategoryId() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Long newCategoryId = 5L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Title", null);
+        UpdateItemRequest request = new UpdateItemRequest(null, null, newCategoryId);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(categoryRepository.existsByIdAndUserId(newCategoryId, userId)).thenReturn(true);
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemResponse response = itemService.updateItem(userId, itemId, request);
+
+        assertThat(response.categoryId()).isEqualTo(newCategoryId);
+    }
+
+    @Test
+    @DisplayName("updateItem applies all three fields when all are non-null")
+    void updateItem_allFields_updatesAllFields() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Long newCategoryId = 5L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Old Title", null);
+        UpdateItemRequest request = new UpdateItemRequest("New Title", "New summary", newCategoryId);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(categoryRepository.existsByIdAndUserId(newCategoryId, userId)).thenReturn(true);
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemResponse response = itemService.updateItem(userId, itemId, request);
+
+        assertThat(response.title()).isEqualTo("New Title");
+        assertThat(response.summary()).isEqualTo("New summary");
+        assertThat(response.categoryId()).isEqualTo(newCategoryId);
+    }
+
+    @Test
+    @DisplayName("updateItem throws ItemNotFoundException when item does not belong to user")
+    void updateItem_itemNotOwned_throwsItemNotFound() {
+        Long userId = 1L;
+        Long itemId = 99L;
+        UpdateItemRequest request = new UpdateItemRequest("New Title", null, null);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> itemService.updateItem(userId, itemId, request))
+                .isInstanceOf(ItemNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("updateItem throws CategoryNotFoundException when categoryId does not belong to user")
+    void updateItem_invalidCategoryId_throwsCategoryNotFound() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Long badCategoryId = 999L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Title", null);
+        UpdateItemRequest request = new UpdateItemRequest(null, null, badCategoryId);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(categoryRepository.existsByIdAndUserId(badCategoryId, userId)).thenReturn(false);
+
+        assertThatThrownBy(() -> itemService.updateItem(userId, itemId, request))
+                .isInstanceOf(CategoryNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("updateItem with null categoryId in request does not touch the categoryId field")
+    void updateItem_nullCategoryId_doesNotChangeCategoryId() {
+        Long userId = 1L;
+        Long itemId = 10L;
+        Item item = new Item(userId, ItemType.LINK, "https://example.com", "Title", null);
+        item.setCategoryId(7L);
+        UpdateItemRequest request = new UpdateItemRequest("New Title", null, null);
+
+        when(itemRepository.findByIdAndUserId(itemId, userId)).thenReturn(Optional.of(item));
+        when(itemRepository.save(any(Item.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        ItemResponse response = itemService.updateItem(userId, itemId, request);
+
+        // categoryId was not in the intent (null), so item keeps its original value
+        assertThat(response.categoryId()).isEqualTo(7L);
+        verify(categoryRepository, never()).existsByIdAndUserId(anyLong(), anyLong());
+    }
+
+    // -------------------------------------------------------------------------
     // createCategory
     // -------------------------------------------------------------------------
 
