@@ -175,7 +175,14 @@ export async function login(request: LoginRequest): Promise<LoginResponse> {
     throw new ApiError(`Login failed with status ${statusCode}`, statusCode);
   }
 
-  return response.json() as Promise<LoginResponse>;
+  // AC-052: await the JSON parse before returning so that the caller's
+  // `await login(...)` resolves to the fully-parsed LoginResponse object.
+  // Returning an un-awaited Promise from an async function adds an extra
+  // microtask tick (Promise-following) before the caller proceeds to
+  // storeTokens(); in MV3 service worker environments this extra tick can
+  // interact with Chrome's service worker scheduling and cause the storage
+  // write to be missed if the worker is reaped between the two microtasks.
+  return (await response.json()) as LoginResponse;
 }
 
 // ---------------------------------------------------------------------------

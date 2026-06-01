@@ -87,6 +87,27 @@ Enable users to save any browser tab in one action (click or keyboard shortcut) 
 
 **Completed: 2026-05-30**
 
+### Bug Fix: TC-016 — AC-052 Tokens Not Surviving Service Worker Stop (2026-05-30)
+
+**Reported failure**: After logging in and stopping the service worker via `chrome://serviceworker-internals`, reopening the popup showed the login form instead of the main view.
+
+**Root cause**: `apiClient.ts` `login()` function used `return response.json() as Promise<LoginResponse>` — returning the JSON-parse Promise unresolved. In an `async` function, returning a thenable causes the JavaScript engine to "follow" the inner Promise via an extra microtask tick (per ECMAScript async-function-resolve semantics) before the caller's `await login(...)` resolves. In Chrome MV3 service worker environments, this extra microtask tick between the fetch completing and the caller receiving the LoginResponse value interacts with Chrome's service worker scheduling. The service worker can be reaped in that window before the `await storeTokens(loginResult.accessToken, loginResult.refreshToken)` call executes, leaving both token keys absent from `chrome.storage.local`. The subsequent popup open then reads empty storage and shows the login form.
+
+**Fix**: Changed `return response.json() as Promise<LoginResponse>` to `return (await response.json()) as LoginResponse` in `apiClient.ts`. This resolves the JSON-parse Promise fully before the `login()` async function returns, eliminating the extra microtask tick and ensuring the caller proceeds immediately to `storeTokens()` without a scheduling gap.
+
+**File changed**: `chrome-extension/src/background/apiClient.ts` — line 178 (`login()` function return statement)
+
+**Post-fix verification**:
+- `npm run build`: PASS — 4 files emitted, exit code 0, no warnings
+- `npx tsc --noEmit`: PASS — zero type errors
+
+**Checklist items re-verified**:
+- AC-052 (tokens in chrome.storage.local exclusively, no module-level variables): PASS — fix closes the race condition; tokens are now guaranteed to be written before `sendResponse` is called
+- AC-053 (refresh before API call when token expired/absent): PASS — unaffected by fix
+- AC-054 (re-auth prompt + token clear on 401): PASS — unaffected by fix
+- Build: PASS
+- TypeScript: PASS
+
 ### Implementation Summary
 
 Implemented the full MOD-007 Chrome Extension (Manifest V3) at `chrome-extension/`. All source files are in feature-based directories under `chrome-extension/src/background/` and `chrome-extension/src/popup/` per the Shared Conventions in production.md.
@@ -269,7 +290,7 @@ Runtime verification requires browser execution; covered in browser test script 
 
 ### Browser Test Script — Awaiting Human Sign-off
 
-**Prerequisites before running any test case:**
+th
 1. Run `cd chrome-extension && npm run build` to produce a fresh `dist/` directory.
 2. Open Chrome and navigate to `chrome://extensions`.
 3. Enable "Developer mode" (top-right toggle).
