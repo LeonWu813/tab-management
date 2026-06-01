@@ -1,7 +1,8 @@
 /**
  * Main dashboard page.
  *
- * AC-014: Displays only items matching active filter criteria.
+ * AC-014: Displays only items matching active filter criteria (category, content type,
+ *         date range, and tag/suggestedCategory).
  * AC-015: Returns search results within 3 seconds (search is debounced 300ms; backend handles query).
  * AC-016: Grid/list toggle with persisted view preference.
  * AC-017: Inline category editing on item cards.
@@ -39,15 +40,52 @@ const CONTENT_TYPE_OPTIONS = [
   { value: 'VIDEO', label: 'Videos' },
 ];
 
+/** Date range filter options — filter items by createdAt (AC-014). */
+const DATE_RANGE_OPTIONS = [
+  { value: '', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: '7days', label: 'Last 7 days' },
+  { value: '30days', label: 'Last 30 days' },
+];
+
+/**
+ * Returns the earliest Date that satisfies the chosen date range option.
+ * Items with createdAt before this threshold are excluded.
+ * Returns null for "All time" (no threshold).
+ */
+function dateRangeThreshold(rangeValue: string): Date | null {
+  if (!rangeValue) return null;
+  const now = new Date();
+  if (rangeValue === 'today') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  }
+  if (rangeValue === '7days') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 7);
+    return d;
+  }
+  if (rangeValue === '30days') {
+    const d = new Date(now);
+    d.setDate(d.getDate() - 30);
+    return d;
+  }
+  return null;
+}
+
 export default function DashboardPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedItemType, setSelectedItemType] = useState<string>('');
+  // Date range filter — options: '', 'today', '7days', '30days' (AC-014)
+  const [selectedDateRange, setSelectedDateRange] = useState<string>('');
+  // Tag filter — matches against suggestedCategory (AI-assigned category tag) (AC-014)
+  const [tagFilter, setTagFilter] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(0);
   const [viewMode, setViewMode] = useViewPreference();
   const [showCreateNote, setShowCreateNote] = useState(false);
 
   const debouncedQuery = useDebounce(searchQuery, DEBOUNCE_DELAY_MS);
+  const debouncedTagFilter = useDebounce(tagFilter, DEBOUNCE_DELAY_MS);
 
   const { data: categoriesData } = useCategories();
   const categories = categoriesData ?? [];
@@ -66,11 +104,19 @@ export default function DashboardPage() {
 
   const recordVisit = useRecordVisit();
 
-  // Client-side filter by category and item type (AC-014)
+  // Client-side filter by category, item type, date range, and tag (AC-014)
   const allItems = itemsPage?.content ?? [];
+  const threshold = dateRangeThreshold(selectedDateRange);
   const filteredItems = allItems.filter((item) => {
     if (selectedCategoryId !== null && item.categoryId !== selectedCategoryId) return false;
     if (selectedItemType && item.itemType !== selectedItemType) return false;
+    // Date range filter: compare item.createdAt against computed threshold
+    if (threshold !== null && new Date(item.createdAt) < threshold) return false;
+    // Tag filter: match against suggestedCategory (AI-assigned tag, case-insensitive substring)
+    if (debouncedTagFilter.trim()) {
+      const tag = item.suggestedCategory ?? '';
+      if (!tag.toLowerCase().includes(debouncedTagFilter.trim().toLowerCase())) return false;
+    }
     return true;
   });
 
@@ -87,6 +133,16 @@ export default function DashboardPage() {
 
   function handleItemTypeFilter(event: React.ChangeEvent<HTMLSelectElement>) {
     setSelectedItemType(event.target.value);
+    setCurrentPage(0);
+  }
+
+  function handleDateRangeFilter(event: React.ChangeEvent<HTMLSelectElement>) {
+    setSelectedDateRange(event.target.value);
+    setCurrentPage(0);
+  }
+
+  function handleTagFilterChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setTagFilter(event.target.value);
     setCurrentPage(0);
   }
 
@@ -163,6 +219,42 @@ export default function DashboardPage() {
           </select>
         </div>
 
+        {/* Date saved filter — AC-014 */}
+        <div>
+          <label htmlFor="date-range-filter" className="sr-only">
+            Filter by date saved
+          </label>
+          <select
+            id="date-range-filter"
+            value={selectedDateRange}
+            onChange={handleDateRangeFilter}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Filter by date saved"
+          >
+            {DATE_RANGE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tag filter (matches suggestedCategory, AI-assigned) — AC-014 */}
+        <div>
+          <label htmlFor="tag-filter" className="sr-only">
+            Filter by tag
+          </label>
+          <input
+            id="tag-filter"
+            type="text"
+            value={tagFilter}
+            onChange={handleTagFilterChange}
+            placeholder="Filter by tag..."
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+            aria-label="Filter by tag"
+          />
+        </div>
+
         {/* Grid/list toggle — AC-016 */}
         <div className="flex rounded-lg border border-gray-300 overflow-hidden" role="group" aria-label="View mode">
           <button
@@ -193,7 +285,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Active filter indicators */}
-      {(selectedCategoryId !== null || selectedItemType) && (
+      {(selectedCategoryId !== null || selectedItemType || selectedDateRange || tagFilter.trim()) && (
         <div className="flex items-center gap-2 flex-wrap text-sm">
           <span className="text-gray-500">Filters:</span>
           {selectedCategoryId !== null && (
@@ -220,6 +312,30 @@ export default function DashboardPage() {
               </button>
             </span>
           )}
+          {selectedDateRange && (
+            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-xs">
+              {DATE_RANGE_OPTIONS.find((o) => o.value === selectedDateRange)?.label}
+              <button
+                onClick={() => setSelectedDateRange('')}
+                className="ml-1 hover:text-green-900"
+                aria-label="Remove date range filter"
+              >
+                &times;
+              </button>
+            </span>
+          )}
+          {tagFilter.trim() && (
+            <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full text-xs">
+              Tag: {tagFilter.trim()}
+              <button
+                onClick={() => setTagFilter('')}
+                className="ml-1 hover:text-yellow-900"
+                aria-label="Remove tag filter"
+              >
+                &times;
+              </button>
+            </span>
+          )}
         </div>
       )}
 
@@ -241,7 +357,7 @@ export default function DashboardPage() {
 
       {!isLoading && !isError && filteredItems.length === 0 && (
         <div className="text-center py-12 text-gray-400">
-          {debouncedQuery || selectedCategoryId !== null || selectedItemType
+          {debouncedQuery || selectedCategoryId !== null || selectedItemType || selectedDateRange || debouncedTagFilter.trim()
             ? 'No items match your search or filters.'
             : 'No saved items yet. Save a tab from the Chrome extension to get started.'}
         </div>

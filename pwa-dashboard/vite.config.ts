@@ -15,8 +15,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,woff,woff2}'],
         runtimeCaching: [
           {
-            // Cache API responses for items list — used for offline display (AC-040)
-            urlPattern: /^https?:\/\/localhost:8080\/api\/items/,
+            // Cache API responses for items list — used for offline display (AC-040).
+            // Match on path prefix so this works on any host (local dev proxy + production).
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/api/items'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-items-cache',
@@ -28,8 +29,8 @@ export default defineConfig({
             },
           },
           {
-            // Cache categories for offline display
-            urlPattern: /^https?:\/\/localhost:8080\/api\/categories/,
+            // Cache categories for offline display.
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/api/categories'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-categories-cache',
@@ -41,8 +42,8 @@ export default defineConfig({
             },
           },
           {
-            // Cache reminders for offline display
-            urlPattern: /^https?:\/\/localhost:8080\/api\/reminders/,
+            // Cache reminders for offline display.
+            urlPattern: ({ url }: { url: URL }) => url.pathname.startsWith('/api/reminders'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-reminders-cache',

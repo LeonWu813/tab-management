@@ -102,6 +102,28 @@ Implemented the full MOD-008 PWA Dashboard. All source files are in the feature-
 - AI/LLM API calls: N/A — this module does not call LLM APIs
 - LLM prompt construction: N/A — not applicable
 
+---
+
+### Bugfix Self-Check Results (2026-05-30)
+
+**Fixes applied:**
+- BUG-1 (AC-014): Added date range filter (`selectedDateRange` state, `DATE_RANGE_OPTIONS` constant, `dateRangeThreshold()` helper, dropdown control with "All time"/"Today"/"Last 7 days"/"Last 30 days" options, active filter chip with clear button) and tag filter (`tagFilter` state with 300ms debounce, text input matching against `suggestedCategory` field with case-insensitive substring match, active filter chip with clear button). Both filters wired into `filteredItems` logic. Empty state and active-filter guard conditions updated to include both new filters.
+- BUG-2 (AC-040): Replaced all three hardcoded `localhost:8080` regex `urlPattern` entries in `vite.config.ts` with path-based function patterns (`({ url }) => url.pathname.startsWith('/api/items|categories|reminders')`). Patterns now match any API host — works via Vite dev proxy locally and on any production deployment.
+
+**Automated checks (self-check.sh, bugfix run):**
+- Build (`npm run build`): PASS — exits 0; dist/sw.js, dist/manifest.webmanifest, dist/index.html, and bundled assets produced
+- TypeScript (`npx tsc --noEmit`): PASS — zero type errors
+- Lint: SKIP — no lint command in production.md Build Config
+- Tests: SKIP — no test command in production.md Build Config
+- Git scope: FLAGGED (known false positive) — same pre-existing untracked files from prior module agents flagged as before; only pwa-dashboard/src/dashboard/DashboardPage.tsx and pwa-dashboard/vite.config.ts were modified in this session, both within the pwa-dashboard/ module boundary
+
+**Judgment-based items (bugfix run):**
+- BUG-1 fix completeness: PASS — all four AC-014 filter dimensions now implemented: category (existing), content type (existing), date range (new), tag (new)
+- BUG-2 fix completeness: PASS — all three runtimeCaching urlPattern entries updated; no localhost:8080 reference remains in Workbox config
+- No hardcoded values introduced: PASS — date range labels and option values are UI constants, not environment-specific config
+- No new dependencies: PASS — fix uses only existing React hooks and native JS Date API
+- Code conventions followed: PASS — new state, handlers, and helpers follow existing file conventions; AC-014 comments updated
+
 ## QA Results
 
 **QA Run: 2026-05-30 — First-time verification (functional-test workflow)**
