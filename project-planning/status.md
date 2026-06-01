@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-item-management
-mode: implement
-module: mod-item-management
-result: success
-commit: a931c4e05674971082e52ae1c5c0bef9e1846dca
-timestamp: 2026-05-30T20:00:00Z
+agent: qa-mod-pwa-dashboard
+mode: verify
+module: mod-pwa-dashboard
+result: bugs-found
+commit: 2301438283b310c3422dc2974e8f588159f43580
+timestamp: 2026-05-30T21:00:00Z
 
 ## Current Phase
 
@@ -300,3 +300,7 @@ Agent: engineer-mod-reminder-service
 Pattern: Setting `spring.quartz.properties.org.quartz.jobStore.class` bypasses Spring Boot QuartzAutoConfiguration DataSource injection — when `org.quartz.jobStore.class` is specified via `spring.quartz.properties`, Quartz's `StdSchedulerFactory` takes over job store initialization natively and requires `org.quartz.jobStore.dataSource` to name a datasource. Spring Boot's `QuartzAutoConfiguration` normally injects the primary DataSource via `SchedulerFactoryBean.setDataSource()`, but this injection only occurs when the job store class is NOT overridden through native Quartz properties. Fix: remove `spring.quartz.properties.org.quartz.jobStore.class` entirely; `spring.quartz.job-store-type=jdbc` alone is sufficient and Spring Boot handles DataSource wiring automatically. The `QUARTZ_JOB_STORE_CLASS` env var and related `.env.example` entries are also dead configuration and should be removed.
 Why: QA Run 4 for MOD-005 found the server still cannot start after the quartzDS removal fix. The `jobStore.class` property was retained from the original Quartz JDBC implementation and continues to force the native StdSchedulerFactory path that requires a datasource name. This is the fourth consecutive Quartz startup failure — each fix has correctly addressed the immediate error while leaving the next layer exposed. The root cause in all four cases is the same: native Quartz properties overriding Spring Boot auto-configuration behavior.
 Agent: engineer-mod-reminder-service
+
+Pattern: Vite PWA Workbox runtimeCaching urlPattern must not hardcode localhost — Workbox urlPattern regexes in vite.config.ts that match `localhost:8080` will never fire in production (Vercel or any non-localhost deployment), causing the NetworkFirst strategy to build no cache during online use, so offline serving of previously loaded API data silently fails. Fix: use a relative-URL pattern (e.g., `/^\/api\//`) when the dev server proxies `/api` to the backend, or inject the API base URL as an env var and construct the pattern dynamically.
+Why: BUG-2 in MOD-008 would cause AC-040 (offline display of previously loaded items) to work locally but silently fail in production. The localhost pattern matches during local dev (where the backend is at localhost:8080) but never matches in any deployed environment. This pattern applies to any PWA project using vite-plugin-pwa with a proxied API.
+Agent: qa-mod-pwa-dashboard
