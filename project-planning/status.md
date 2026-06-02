@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-pwa-dashboard
-mode: bugfix
+agent: qa-mod-pwa-dashboard
+mode: regression
 module: mod-pwa-dashboard
-result: success
-commit: 5903c4a0e5d1ee0d075d8d56873c0cb2665468e4
-timestamp: 2026-05-30T22:00:00Z
+result: bugs-found
+commit: ce84fd4ef822ff01b84461277d7258c37a1f742c
+timestamp: 2026-05-30T22:30:00Z
 
 ## Current Phase
 
