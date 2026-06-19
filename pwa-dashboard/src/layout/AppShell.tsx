@@ -25,7 +25,7 @@ export default function AppShell() {
       <header className="bg-[#f2f1f0] border-b border-[#D9C196]/30 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <span className="text-primary-dark font-bold text-lg">TabVault</span>
+            <span className="text-dark font-bold text-lg">TabVault</span>
             <nav className="hidden sm:flex items-center gap-1">
               {NAV_ITEMS.map((item) => (
                 <NavLink

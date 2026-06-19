@@ -238,7 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
   appName: {
     fontSize: 16,
     fontWeight: 700,
-    color: "#c4a96e",
+    color: "#0d0d0d",
     textDecoration: "none",
   },
   logoutButton: {
