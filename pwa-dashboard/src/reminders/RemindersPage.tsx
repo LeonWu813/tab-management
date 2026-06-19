@@ -140,14 +140,14 @@ export default function RemindersPage() {
     return (
       <div
         className={`bg-white border rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 ${
-          reminder.dueWithin24Hours ? 'border-orange-300 bg-orange-50' : 'border-gray-200'
+          reminder.dueWithin24Hours ? 'border-highlight/40 bg-highlight/10' : 'border-gray-200'
         }`}
       >
         <div className="flex-1">
           <div className="flex items-center gap-2">
             {reminder.dueWithin24Hours && (
-              <span className="text-orange-500 text-sm" title="Due within 24 hours" aria-label="Due soon">
-                🔔
+              <span className="material-symbols-outlined text-highlight" style={{fontSize:'16px'}} title="Due within 24 hours" aria-label="Due soon">
+                schedule
               </span>
             )}
             <span className="text-sm font-medium text-gray-900">{reminder.label}</span>
@@ -169,7 +169,7 @@ export default function RemindersPage() {
                   type="date"
                   value={newDate}
                   onChange={(e) => setNewDate(e.target.value)}
-                  className="border border-gray-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="border border-gray-300 rounded px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   min={new Date().toISOString().split('T')[0]}
                   aria-label="New due date"
                 />
@@ -180,7 +180,7 @@ export default function RemindersPage() {
                     }
                     setEditingDate(false);
                   }}
-                  className="text-xs text-blue-600 hover:text-blue-800"
+                  className="text-xs text-primary-dark hover:text-dark"
                 >
                   Save
                 </button>
@@ -197,7 +197,7 @@ export default function RemindersPage() {
             ) : (
               <button
                 onClick={() => setEditingDate(true)}
-                className="text-xs text-gray-500 hover:text-blue-600 transition-colors"
+                className="text-xs text-gray-500 hover:text-primary-dark transition-colors"
                 aria-label={`Due date: ${formatDueDate(reminder.dueDate)}. Click to change.`}
               >
                 Due {formatDueDate(reminder.dueDate)}
@@ -212,7 +212,7 @@ export default function RemindersPage() {
           {reminder.status === 'PENDING_CONFIRMATION' && (
             <button
               onClick={() => updateReminder.mutate({ id: reminder.id })}
-              className="text-xs bg-green-100 text-green-700 hover:bg-green-200 rounded px-2.5 py-1 font-medium transition-colors"
+              className="text-xs bg-primary/20 text-dark hover:bg-primary/40 rounded px-2.5 py-1 font-medium transition-colors"
               aria-label={`Confirm reminder for ${reminder.label}`}
             >
               Confirm
@@ -236,7 +236,7 @@ export default function RemindersPage() {
         <h1 className="text-xl font-semibold text-gray-900">Reminders</h1>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+          className="bg-primary hover:bg-primary-dark text-dark text-sm font-medium rounded-lg px-4 py-2 transition-colors"
         >
           {showForm ? 'Cancel' : '+ New reminder'}
         </button>
@@ -266,7 +266,7 @@ export default function RemindersPage() {
                 type="number"
                 value={formValues.itemId}
                 onChange={(e) => handleFormChange('itemId', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="e.g. 42"
                 min={1}
               />
@@ -285,7 +285,7 @@ export default function RemindersPage() {
                 value={formValues.dueDate}
                 onChange={(e) => handleFormChange('dueDate', e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               />
               {formErrors.dueDate && (
                 <p className="text-red-600 text-xs mt-1">{formErrors.dueDate}</p>
@@ -301,7 +301,7 @@ export default function RemindersPage() {
                 type="text"
                 value={formValues.label}
                 onChange={(e) => handleFormChange('label', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Reminder label"
               />
             </div>
@@ -322,7 +322,7 @@ export default function RemindersPage() {
             <button
               type="submit"
               disabled={createReminder.isPending}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+              className="bg-primary hover:bg-primary-dark disabled:bg-primary/60 text-dark font-medium rounded-lg px-4 py-2 text-sm transition-colors"
             >
               {createReminder.isPending ? 'Creating...' : 'Create reminder'}
             </button>
@@ -343,8 +343,9 @@ export default function RemindersPage() {
       {/* Due soon section — AC-024 badge indicator */}
       {dueSoonReminders.length > 0 && (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold text-orange-600 flex items-center gap-1.5">
-            🔔 Due soon ({dueSoonReminders.length})
+          <h2 className="text-sm font-semibold text-highlight flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-highlight" style={{fontSize:'16px'}}>schedule</span>
+            Due soon ({dueSoonReminders.length})
           </h2>
           {dueSoonReminders.map((r) => (
             <ReminderRow key={r.id} reminder={r} />

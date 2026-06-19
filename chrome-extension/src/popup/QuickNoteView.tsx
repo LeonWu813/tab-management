@@ -62,9 +62,12 @@ export function QuickNoteView({
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h2 style={styles.title}>Quick note</h2>
-        <button onClick={onCancel} style={styles.cancelButton} type="button">
-          ✕
+        <h2 style={styles.title}>
+          <span className="material-symbols-outlined" style={{fontSize:'18px', marginRight:6}}>note_add</span>
+          Quick note
+        </h2>
+        <button onClick={onCancel} style={styles.cancelButton} type="button" aria-label="Cancel">
+          <span className="material-symbols-outlined" style={{fontSize:'18px'}}>close</span>
         </button>
       </div>
 
@@ -103,6 +106,7 @@ export function QuickNoteView({
               opacity: isSubmitting || !noteBody.trim() ? 0.6 : 1,
             }}
           >
+            <span className="material-symbols-outlined" style={{fontSize:'14px', marginRight:4}}>save</span>
             {isSubmitting ? "Saving…" : "Save note"}
           </button>
         </div>
@@ -121,6 +125,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
+    background: "#f2f1f0",
   },
   header: {
     display: "flex",
@@ -130,7 +135,9 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 16,
     fontWeight: 600,
-    color: "#1a1a2e",
+    color: "#0d0d0d",
+    display: "flex",
+    alignItems: "center",
   },
   cancelButton: {
     background: "none",
@@ -139,6 +146,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     color: "#888",
     padding: "2px 6px",
+    display: "flex",
+    alignItems: "center",
   },
   form: {
     display: "flex",
@@ -148,16 +157,17 @@ const styles: Record<string, React.CSSProperties> = {
   textarea: {
     width: "100%",
     padding: "8px 10px",
-    border: "1px solid #ccc",
+    border: "1px solid rgba(217,193,150,0.4)",
     borderRadius: 6,
     fontSize: 13,
     fontFamily: "inherit",
     resize: "vertical",
     outline: "none",
+    background: "#ffffff",
   },
   errorText: {
     fontSize: 12,
-    color: "#dc3545",
+    color: "#ef4444",
   },
   actions: {
     display: "flex",
@@ -165,22 +175,24 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "flex-end",
   },
   secondaryButton: {
-    backgroundColor: "#f0f0f0",
-    color: "#444",
-    border: "1px solid #ddd",
+    backgroundColor: "#faf9f4",
+    color: "#0d0d0d",
+    border: "1px solid rgba(217,193,150,0.4)",
     borderRadius: 6,
     padding: "7px 14px",
     fontSize: 13,
     cursor: "pointer",
   },
   primaryButton: {
-    backgroundColor: "#4a8cde",
-    color: "#fff",
+    backgroundColor: "#D9C196",
+    color: "#0d0d0d",
     border: "none",
     borderRadius: 6,
     padding: "7px 14px",
     fontSize: 13,
     fontWeight: 600,
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
   },
 };

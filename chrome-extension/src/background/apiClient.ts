@@ -15,7 +15,7 @@ import {
   clearTokens,
   getStoredTokens,
   isAccessTokenExpiredOrAbsent,
-  storeAccessToken,
+  storeTokens,
 } from "./tokenStorage.js";
 
 // ---------------------------------------------------------------------------
@@ -119,8 +119,8 @@ async function getValidAccessToken(): Promise<string> {
   }
 
   const refreshed = await attemptTokenRefresh(refreshToken);
-  await storeAccessToken(refreshed);
-  return refreshed;
+  await storeTokens(refreshed.accessToken, refreshed.refreshToken);
+  return refreshed.accessToken;
 }
 
 /**
@@ -128,7 +128,9 @@ async function getValidAccessToken(): Promise<string> {
  *
  * Throws AuthError (and clears tokens) if the refresh returns HTTP 401 (AC-054).
  */
-async function attemptTokenRefresh(refreshToken: string): Promise<string> {
+async function attemptTokenRefresh(
+  refreshToken: string
+): Promise<{ accessToken: string; refreshToken: string }> {
   const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -138,9 +140,7 @@ async function attemptTokenRefresh(refreshToken: string): Promise<string> {
   if (response.status === 401) {
     // Refresh failed — clear tokens so the popup shows re-auth prompt (AC-054).
     await clearTokens();
-    throw new AuthError(
-      "Session expired. Please log in again."
-    );
+    throw new AuthError("Session expired. Please log in again.");
   }
 
   if (!response.ok) {
@@ -150,8 +150,7 @@ async function attemptTokenRefresh(refreshToken: string): Promise<string> {
     );
   }
 
-  const body = (await response.json()) as { accessToken: string };
-  return body.accessToken;
+  return (await response.json()) as { accessToken: string; refreshToken: string };
 }
 
 // ---------------------------------------------------------------------------

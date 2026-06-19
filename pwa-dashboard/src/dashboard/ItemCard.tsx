@@ -95,10 +95,10 @@ export default function ItemCard({
 
   const typeColor =
     item.itemType === 'NOTE'
-      ? 'bg-yellow-100 text-yellow-700'
+      ? 'bg-primary/20 text-dark'
       : item.itemType === 'VIDEO'
       ? 'bg-purple-100 text-purple-700'
-      : 'bg-blue-100 text-blue-700';
+      : 'bg-primary/10 text-dark';
 
   if (viewMode === 'list') {
     return (
@@ -115,8 +115,10 @@ export default function ItemCard({
               }}
             />
           ) : (
-            <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center text-sm">
-              {item.itemType === 'NOTE' ? '📝' : item.itemType === 'VIDEO' ? '🎥' : '🔗'}
+            <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+              <span className="material-symbols-outlined" style={{fontSize:'16px'}}>
+                {item.itemType === 'NOTE' ? 'note' : item.itemType === 'VIDEO' ? 'play_circle' : 'link'}
+              </span>
             </div>
           )}
         </div>
@@ -131,12 +133,12 @@ export default function ItemCard({
                   className="inline-flex items-center text-orange-500 text-xs font-medium"
                   aria-label="Reminder due within 24 hours"
                 >
-                  🔔
+                  <span className="material-symbols-outlined" style={{fontSize:'14px'}}>notifications</span>
                 </span>
               )}
               {item.pinned && (
-                <span className="text-xs text-gray-400" title="Pinned">
-                  📌
+                <span className="text-xs bg-secondary/30 text-dark px-1.5 py-0.5 rounded" title="Pinned">
+                  <span className="material-symbols-outlined" style={{fontSize:'12px'}}>push_pin</span>
                 </span>
               )}
               {/* Inline title editing — AC-017 */}
@@ -151,14 +153,14 @@ export default function ItemCard({
                     if (e.key === 'Enter') saveTitle();
                     if (e.key === 'Escape') setIsEditingTitle(false);
                   }}
-                  className="text-sm font-medium text-gray-900 border-b border-blue-500 focus:outline-none w-full"
+                  className="text-sm font-medium text-gray-900 border-b border-primary focus:outline-none w-full"
                   aria-label="Edit title"
                 />
               ) : (
                 <div className="flex items-center gap-1">
                   <button
                     onClick={handleTitleClick}
-                    className="text-sm font-medium text-gray-900 hover:text-blue-600 text-left"
+                    className="text-sm font-medium text-gray-900 hover:text-primary-dark text-left"
                     aria-label={`Open ${item.title ?? 'item'}`}
                   >
                     {item.title ?? item.url ?? 'Untitled'}
@@ -169,7 +171,7 @@ export default function ItemCard({
                     aria-label="Edit title inline"
                     title="Edit title"
                   >
-                    ✏️
+                    <span className="material-symbols-outlined" style={{fontSize:'14px'}}>edit</span>
                   </button>
                 </div>
               )}
@@ -191,7 +193,7 @@ export default function ItemCard({
                 if (e.key === 'Escape') setIsEditingSummary(false);
               }}
               rows={2}
-              className="text-xs text-gray-500 mt-1 w-full border border-blue-300 rounded p-1 focus:outline-none resize-none"
+              className="text-xs text-gray-500 mt-1 w-full border border-primary/60 rounded p-1 focus:outline-none resize-none"
               aria-label="Edit summary"
             />
           ) : item.summary ? (
@@ -203,7 +205,7 @@ export default function ItemCard({
                 aria-label="Edit summary inline"
                 title="Edit summary"
               >
-                ✏️
+                <span className="material-symbols-outlined" style={{fontSize:'14px'}}>edit</span>
               </button>
             </div>
           ) : null}
@@ -220,7 +222,7 @@ export default function ItemCard({
                 defaultValue={item.categoryId?.toString() ?? ''}
                 onChange={handleCategoryChange}
                 onBlur={() => setIsEditingCategory(false)}
-                className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
                 aria-label="Select category"
               >
                 <option value="">Uncategorized</option>
@@ -233,7 +235,7 @@ export default function ItemCard({
             ) : (
               <button
                 onClick={() => setIsEditingCategory(true)}
-                className="text-xs text-gray-400 hover:text-blue-600 transition-colors"
+                className="text-xs text-gray-400 hover:text-primary-dark transition-colors"
                 title="Change category"
                 aria-label={`Category: ${categoryName ?? 'Uncategorized'}. Click to change.`}
               >
@@ -267,22 +269,22 @@ export default function ItemCard({
               }}
             />
           ) : (
-            <span className="text-base flex-shrink-0">
-              {item.itemType === 'NOTE' ? '📝' : item.itemType === 'VIDEO' ? '🎥' : '🔗'}
+            <span className="material-symbols-outlined flex-shrink-0" style={{fontSize:'18px'}}>
+              {item.itemType === 'NOTE' ? 'note' : item.itemType === 'VIDEO' ? 'play_circle' : 'link'}
             </span>
           )}
           {hasDueSoonReminder && (
             <span
               title="Reminder due soon"
-              className="text-orange-500 text-sm"
+              className="text-orange-500"
               aria-label="Reminder due within 24 hours"
             >
-              🔔
+              <span className="material-symbols-outlined" style={{fontSize:'16px'}}>notifications</span>
             </span>
           )}
           {item.pinned && (
-            <span className="text-xs text-gray-400" title="Pinned">
-              📌
+            <span className="text-xs bg-secondary/30 text-dark px-1.5 py-0.5 rounded" title="Pinned">
+              <span className="material-symbols-outlined" style={{fontSize:'12px'}}>push_pin</span>
             </span>
           )}
         </div>
@@ -303,25 +305,25 @@ export default function ItemCard({
             if (e.key === 'Enter') saveTitle();
             if (e.key === 'Escape') setIsEditingTitle(false);
           }}
-          className="text-sm font-medium text-gray-900 border-b border-blue-500 focus:outline-none w-full"
+          className="text-sm font-medium text-gray-900 border-b border-primary focus:outline-none w-full"
           aria-label="Edit title"
         />
       ) : (
         <div className="flex items-start gap-1">
           <button
             onClick={handleTitleClick}
-            className="text-sm font-medium text-gray-900 hover:text-blue-600 text-left line-clamp-2 flex-1"
+            className="text-sm font-medium text-gray-900 hover:text-primary-dark text-left line-clamp-2 flex-1"
             aria-label={`Open ${item.title ?? 'item'}`}
           >
             {item.title ?? item.url ?? 'Untitled'}
           </button>
           <button
             onClick={startEditTitle}
-            className="text-gray-300 hover:text-gray-500 text-xs flex-shrink-0"
+            className="text-gray-300 hover:text-gray-500 flex-shrink-0"
             aria-label="Edit title inline"
             title="Edit title"
           >
-            ✏️
+            <span className="material-symbols-outlined" style={{fontSize:'14px'}}>edit</span>
           </button>
         </div>
       )}
@@ -337,7 +339,7 @@ export default function ItemCard({
             if (e.key === 'Escape') setIsEditingSummary(false);
           }}
           rows={3}
-          className="text-xs text-gray-500 w-full border border-blue-300 rounded p-1 focus:outline-none resize-none"
+          className="text-xs text-gray-500 w-full border border-primary/60 rounded p-1 focus:outline-none resize-none"
           aria-label="Edit summary"
         />
       ) : item.summary ? (
@@ -345,11 +347,11 @@ export default function ItemCard({
           <p className="text-xs text-gray-500 line-clamp-3 flex-1">{item.summary}</p>
           <button
             onClick={startEditSummary}
-            className="text-gray-300 hover:text-gray-500 text-xs flex-shrink-0"
+            className="text-gray-300 hover:text-gray-500 flex-shrink-0"
             aria-label="Edit summary inline"
             title="Edit summary"
           >
-            ✏️
+            <span className="material-symbols-outlined" style={{fontSize:'14px'}}>edit</span>
           </button>
         </div>
       ) : null}
@@ -367,7 +369,7 @@ export default function ItemCard({
             defaultValue={item.categoryId?.toString() ?? ''}
             onChange={handleCategoryChange}
             onBlur={() => setIsEditingCategory(false)}
-            className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary"
             aria-label="Select category"
           >
             <option value="">Uncategorized</option>
@@ -380,7 +382,7 @@ export default function ItemCard({
         ) : (
           <button
             onClick={() => setIsEditingCategory(true)}
-            className="text-xs text-gray-400 hover:text-blue-600 transition-colors truncate max-w-[60%]"
+            className="text-xs text-gray-400 hover:text-primary-dark transition-colors truncate max-w-[60%]"
             title="Change category"
             aria-label={`Category: ${categoryName ?? 'Uncategorized'}. Click to change.`}
           >

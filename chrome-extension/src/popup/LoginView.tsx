@@ -121,6 +121,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
+    background: "#f2f1f0",
   },
   header: {
     display: "flex",
@@ -136,7 +137,7 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: 20,
     fontWeight: 700,
-    color: "#1a1a2e",
+    color: "#0d0d0d",
   },
   subtitle: {
     fontSize: 13,
@@ -162,19 +163,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   input: {
     padding: "8px 10px",
-    border: "1px solid #ccc",
+    border: "1px solid rgba(217,193,150,0.4)",
     borderRadius: 6,
     fontSize: 14,
     outline: "none",
     width: "100%",
+    background: "#ffffff",
   },
   errorText: {
     fontSize: 12,
-    color: "#dc3545",
+    color: "#ef4444",
   },
   primaryButton: {
-    backgroundColor: "#4a8cde",
-    color: "#fff",
+    backgroundColor: "#D9C196",
+    color: "#0d0d0d",
     border: "none",
     borderRadius: 6,
     padding: "10px 0",

@@ -96,11 +96,11 @@ export default function ShareTargetPage() {
   }, [status, navigate]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-app-bg px-4">
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-md text-center">
         {status === 'saving' && (
           <>
-            <div className="text-4xl mb-4">💾</div>
+            <div className="mb-4 flex justify-center"><span className="material-symbols-outlined" style={{fontSize:'2.5rem'}}>save</span></div>
             <h1 className="text-lg font-semibold text-gray-900 mb-2">Saving to TabVault...</h1>
             <p className="text-sm text-gray-500 truncate">{sharedUrl}</p>
           </>
@@ -108,7 +108,7 @@ export default function ShareTargetPage() {
 
         {status === 'saved' && (
           <>
-            <div className="text-4xl mb-4">✅</div>
+            <div className="mb-4 flex justify-center"><span className="material-symbols-outlined" style={{fontSize:'2.5rem', color:'#16a34a'}}>check_circle</span></div>
             <h1 className="text-lg font-semibold text-gray-900 mb-2">Saved!</h1>
             <p className="text-sm text-gray-500 mb-4 truncate">{sharedUrl}</p>
             <p className="text-xs text-gray-400">Redirecting to dashboard...</p>
@@ -117,7 +117,7 @@ export default function ShareTargetPage() {
 
         {status === 'queued' && (
           <>
-            <div className="text-4xl mb-4">📥</div>
+            <div className="mb-4 flex justify-center"><span className="material-symbols-outlined" style={{fontSize:'2.5rem'}}>inbox</span></div>
             <h1 className="text-lg font-semibold text-gray-900 mb-2">Queued for later</h1>
             <p className="text-sm text-gray-500 mb-4 truncate">{sharedUrl}</p>
             <p className="text-sm text-gray-500 mb-6">
@@ -126,7 +126,7 @@ export default function ShareTargetPage() {
             </p>
             <button
               onClick={() => navigate('/')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2 text-sm"
+              className="bg-primary hover:bg-primary-dark text-dark font-medium rounded-lg px-4 py-2 text-sm"
             >
               Go to dashboard
             </button>
@@ -135,12 +135,12 @@ export default function ShareTargetPage() {
 
         {status === 'error' && (
           <>
-            <div className="text-4xl mb-4">❌</div>
+            <div className="mb-4 flex justify-center"><span className="material-symbols-outlined" style={{fontSize:'2.5rem', color:'#ef4444'}}>cancel</span></div>
             <h1 className="text-lg font-semibold text-gray-900 mb-2">Could not save</h1>
             <p className="text-sm text-red-600 mb-6">{errorMessage}</p>
             <button
               onClick={() => navigate('/')}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2 text-sm"
+              className="bg-primary hover:bg-primary-dark text-dark font-medium rounded-lg px-4 py-2 text-sm"
             >
               Go to dashboard
             </button>

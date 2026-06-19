@@ -28,7 +28,7 @@ export default function CategoriesPage() {
   const [showForm, setShowForm] = useState(false);
   const [formValues, setFormValues] = useState<CreateCategoryFormValues>({
     name: '',
-    color: '#3b82f6',
+    color: '#D9C196',
     icon: '',
   });
   const [formErrors, setFormErrors] = useState<
@@ -55,7 +55,7 @@ export default function CategoriesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['categories'] });
       setShowForm(false);
-      setFormValues({ name: '', color: '#3b82f6', icon: '' });
+      setFormValues({ name: '', color: '#D9C196', icon: '' });
       setFormErrors({});
       setServerError(null);
     },
@@ -114,7 +114,7 @@ export default function CategoriesPage() {
         <h1 className="text-xl font-semibold text-gray-900">Categories</h1>
         <button
           onClick={() => setShowForm((s) => !s)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+          className="bg-primary hover:bg-primary-dark text-dark text-sm font-medium rounded-lg px-4 py-2 transition-colors"
         >
           {showForm ? 'Cancel' : '+ New category'}
         </button>
@@ -144,7 +144,7 @@ export default function CategoriesPage() {
                 type="text"
                 value={formValues.name}
                 onChange={(e) => handleFormChange('name', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Category name"
                 maxLength={50}
               />
@@ -169,8 +169,8 @@ export default function CategoriesPage() {
                   type="text"
                   value={formValues.color}
                   onChange={(e) => handleFormChange('color', e.target.value)}
-                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-                  placeholder="#3b82f6"
+                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+                  placeholder="#D9C196"
                   maxLength={7}
                 />
               </div>
@@ -188,7 +188,7 @@ export default function CategoriesPage() {
                 type="text"
                 value={formValues.icon}
                 onChange={(e) => handleFormChange('icon', e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="e.g. briefcase"
               />
             </div>
@@ -209,7 +209,7 @@ export default function CategoriesPage() {
             <button
               type="submit"
               disabled={createCategory.isPending}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+              className="bg-primary hover:bg-primary-dark disabled:bg-primary/60 text-dark font-medium rounded-lg px-4 py-2 text-sm transition-colors"
             >
               {createCategory.isPending ? 'Creating...' : 'Create category'}
             </button>

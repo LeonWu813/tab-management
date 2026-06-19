@@ -146,7 +146,7 @@ export default function SettingsPage() {
                 }
                 disabled={updateSettings.isPending}
                 className={`relative inline-flex w-11 h-6 rounded-full transition-colors ${
-                  settings.autoCleanupEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                  settings.autoCleanupEnabled ? 'bg-primary' : 'bg-gray-300'
                 } disabled:opacity-50`}
                 aria-label="Toggle auto-cleanup"
               >
@@ -179,7 +179,7 @@ export default function SettingsPage() {
                     })
                   }
                   disabled={updateSettings.isPending}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                   aria-label="Staleness threshold in days"
                 >
                   {THRESHOLD_OPTIONS.map((opt) => (
@@ -221,7 +221,7 @@ export default function SettingsPage() {
               !('serviceWorker' in navigator) ||
               !('PushManager' in window)
             }
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+            className="bg-primary hover:bg-primary-dark disabled:bg-primary/60 text-dark font-medium rounded-lg px-4 py-2 text-sm transition-colors"
             aria-label="Enable push notifications"
           >
             {pushStatus === 'requesting'

@@ -153,7 +153,7 @@ export default function DashboardPage() {
         <h1 className="text-xl font-semibold text-gray-900">Saved Items</h1>
         <button
           onClick={() => setShowCreateNote(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg px-4 py-2 transition-colors"
+          className="bg-primary hover:bg-primary-dark text-dark text-sm font-medium rounded-lg px-4 py-2 transition-colors"
           aria-label="Create a new note"
         >
           + New note
@@ -173,7 +173,7 @@ export default function DashboardPage() {
             value={searchQuery}
             onChange={handleSearchChange}
             placeholder="Search titles, summaries, notes..."
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Search saved items"
           />
         </div>
@@ -187,7 +187,7 @@ export default function DashboardPage() {
             id="category-filter"
             value={selectedCategoryId?.toString() ?? ''}
             onChange={handleCategoryFilter}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Filter by category"
           >
             <option value="">All categories</option>
@@ -208,7 +208,7 @@ export default function DashboardPage() {
             id="type-filter"
             value={selectedItemType}
             onChange={handleItemTypeFilter}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Filter by content type"
           >
             {CONTENT_TYPE_OPTIONS.map((opt) => (
@@ -228,7 +228,7 @@ export default function DashboardPage() {
             id="date-range-filter"
             value={selectedDateRange}
             onChange={handleDateRangeFilter}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
             aria-label="Filter by date saved"
           >
             {DATE_RANGE_OPTIONS.map((opt) => (
@@ -250,7 +250,7 @@ export default function DashboardPage() {
             value={tagFilter}
             onChange={handleTagFilterChange}
             placeholder="Filter by tag..."
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 w-36"
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-36"
             aria-label="Filter by tag"
           />
         </div>
@@ -261,25 +261,25 @@ export default function DashboardPage() {
             onClick={() => setViewMode('grid')}
             className={`px-3 py-2 text-sm transition-colors ${
               viewMode === 'grid'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+                ? 'bg-primary text-dark'
+                : 'bg-white text-dark/60 hover:bg-gray-50'
             }`}
             aria-pressed={viewMode === 'grid'}
             aria-label="Grid view"
           >
-            ⊞ Grid
+            <span className="material-symbols-outlined" style={{fontSize:'16px'}}>grid_view</span> Grid
           </button>
           <button
             onClick={() => setViewMode('list')}
             className={`px-3 py-2 text-sm transition-colors ${
               viewMode === 'list'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white text-gray-600 hover:bg-gray-50'
+                ? 'bg-primary text-dark'
+                : 'bg-white text-dark/60 hover:bg-gray-50'
             }`}
             aria-pressed={viewMode === 'list'}
             aria-label="List view"
           >
-            ☰ List
+            <span className="material-symbols-outlined" style={{fontSize:'16px'}}>view_list</span> List
           </button>
         </div>
       </div>
@@ -289,11 +289,11 @@ export default function DashboardPage() {
         <div className="flex items-center gap-2 flex-wrap text-sm">
           <span className="text-gray-500">Filters:</span>
           {selectedCategoryId !== null && (
-            <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs">
+            <span className="bg-primary/20 text-dark px-2 py-0.5 rounded-full text-xs">
               {categories.find((c) => c.id === selectedCategoryId)?.name ?? 'Category'}
               <button
                 onClick={() => setSelectedCategoryId(null)}
-                className="ml-1 hover:text-blue-900"
+                className="ml-1 hover:text-dark"
                 aria-label="Remove category filter"
               >
                 &times;

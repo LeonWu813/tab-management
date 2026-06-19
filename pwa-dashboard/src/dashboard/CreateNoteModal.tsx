@@ -72,7 +72,9 @@ export default function CreateNoteModal({ onClose }: CreateNoteModalProps) {
         aria-label="Note queued for later"
       >
         <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 text-center">
-          <div className="text-4xl mb-4">📥</div>
+          <div className="mb-4 flex justify-center">
+            <span className="material-symbols-outlined" style={{fontSize:'2rem'}}>inbox</span>
+          </div>
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Note queued</h2>
           <p className="text-sm text-gray-500 mb-6">
             You are offline. Your note has been saved locally and will be submitted to the
@@ -80,7 +82,7 @@ export default function CreateNoteModal({ onClose }: CreateNoteModalProps) {
           </p>
           <button
             onClick={onClose}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg px-4 py-2 text-sm"
+            className="bg-primary hover:bg-primary-dark text-dark font-medium rounded-lg px-4 py-2 text-sm"
           >
             OK
           </button>
@@ -123,7 +125,7 @@ export default function CreateNoteModal({ onClose }: CreateNoteModalProps) {
               setError(null);
             }}
             rows={6}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
             placeholder="Type your note here..."
             aria-label="Note body"
           />
@@ -138,14 +140,14 @@ export default function CreateNoteModal({ onClose }: CreateNoteModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              className="px-4 py-2 text-sm text-dark/60 hover:text-dark transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={createNote.isPending}
-              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg px-4 py-2 text-sm transition-colors"
+              className="bg-primary hover:bg-primary-dark disabled:bg-primary/60 text-dark font-medium rounded-lg px-4 py-2 text-sm transition-colors"
             >
               {createNote.isPending ? 'Saving...' : !navigator.onLine ? 'Queue note' : 'Save note'}
             </button>

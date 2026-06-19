@@ -123,7 +123,12 @@ export function MainView({
       <div style={styles.header}>
         <div style={styles.logoRow}>
           <img src="../icons/icon32.png" alt="" style={styles.logo} />
-          <span style={styles.appName}>TabVault</span>
+          <a
+            href="https://tab-vault.com"
+            target="_blank"
+            rel="noreferrer"
+            style={styles.appName}
+          >TabVault</a>
         </div>
         <button
           onClick={handleLogout}
@@ -131,6 +136,7 @@ export function MainView({
           type="button"
           title="Sign out"
         >
+          <span className="material-symbols-outlined" style={{fontSize:'16px', marginRight:3}}>logout</span>
           Sign out
         </button>
       </div>
@@ -146,6 +152,7 @@ export function MainView({
           }}
           type="button"
         >
+          <span className="material-symbols-outlined" style={{fontSize:'16px', marginRight:6}}>save</span>
           {isSaving ? "Saving…" : "Save current tab"}
         </button>
 
@@ -170,6 +177,7 @@ export function MainView({
             }}
             type="button"
           >
+            <span className="material-symbols-outlined" style={{fontSize:'14px', marginRight:4}}>note_add</span>
             Quick note
           </button>
         </div>
@@ -180,7 +188,7 @@ export function MainView({
         <p
           style={{
             ...styles.statusMessage,
-            color: saveStatus === "error" ? "#dc3545" : "#28a745",
+            color: saveStatus === "error" ? "#dc2626" : "#16a34a",
           }}
           role="status"
           aria-live="polite"
@@ -191,7 +199,7 @@ export function MainView({
 
       {/* Keyboard shortcuts hint */}
       <div style={styles.shortcutsHint}>
-        <span>⌨ </span>
+        <span className="material-symbols-outlined" style={{fontSize:'12px', marginRight:3}}>keyboard</span>
         <span>Save tab: Ctrl+Shift+S / ⌘+Shift+S</span>
       </div>
 
@@ -215,7 +223,8 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "12px 16px",
-    borderBottom: "1px solid #f0f0f0",
+    borderBottom: "1px solid rgba(217,193,150,0.4)",
+    background: "#f2f1f0",
   },
   logoRow: {
     display: "flex",
@@ -229,7 +238,8 @@ const styles: Record<string, React.CSSProperties> = {
   appName: {
     fontSize: 16,
     fontWeight: 700,
-    color: "#1a1a2e",
+    color: "#c4a96e",
+    textDecoration: "none",
   },
   logoutButton: {
     background: "none",
@@ -238,16 +248,19 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#888",
     cursor: "pointer",
     padding: "4px 6px",
+    display: "flex",
+    alignItems: "center",
   },
   actions: {
     padding: "12px 16px",
     display: "flex",
     flexDirection: "column",
     gap: "8px",
+    background: "#f2f1f0",
   },
   primaryButton: {
-    backgroundColor: "#4a8cde",
-    color: "#fff",
+    backgroundColor: "#D9C196",
+    color: "#0d0d0d",
     border: "none",
     borderRadius: 6,
     padding: "10px 0",
@@ -255,6 +268,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
     width: "100%",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   secondaryActions: {
     display: "flex",
@@ -262,13 +278,16 @@ const styles: Record<string, React.CSSProperties> = {
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
-    color: "#333",
-    border: "1px solid #ddd",
+    backgroundColor: "#faf9f4",
+    color: "#0d0d0d",
+    border: "1px solid rgba(217,193,150,0.4)",
     borderRadius: 6,
     padding: "8px 0",
     fontSize: 13,
     cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
   statusMessage: {
     fontSize: 13,
@@ -280,5 +299,8 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#aaa",
     padding: "0 16px 8px",
     textAlign: "center",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
   },
 };

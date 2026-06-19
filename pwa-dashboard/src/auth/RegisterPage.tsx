@@ -74,10 +74,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-app-bg px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-blue-600">TabVault</h1>
+          <h1 className="text-3xl font-bold text-dark">TabVault</h1>
           <p className="text-gray-500 mt-2">Create your account</p>
         </div>
 
@@ -101,7 +101,7 @@ export default function RegisterPage() {
               autoComplete="name"
               value={values.displayName}
               onChange={(e) => handleChange('displayName', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Your name"
             />
             {errors.displayName && (
@@ -119,7 +119,7 @@ export default function RegisterPage() {
               autoComplete="email"
               value={values.email}
               onChange={(e) => handleChange('email', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="you@example.com"
             />
             {errors.email && (
@@ -137,7 +137,7 @@ export default function RegisterPage() {
               autoComplete="new-password"
               value={values.password}
               onChange={(e) => handleChange('password', e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="At least 8 characters"
             />
             {errors.password && (
@@ -148,14 +148,14 @@ export default function RegisterPage() {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium rounded-lg py-2.5 text-sm transition-colors"
+            className="w-full bg-primary hover:bg-primary-dark disabled:bg-primary/60 text-dark font-medium rounded-lg py-2.5 text-sm transition-colors"
           >
             {isLoading ? 'Creating account...' : 'Create account'}
           </button>
 
           <p className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <Link to="/login" className="text-blue-600 hover:underline">
+            <Link to="/login" className="text-primary-dark hover:underline">
               Sign in
             </Link>
           </p>
