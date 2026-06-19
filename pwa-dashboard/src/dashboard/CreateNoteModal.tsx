@@ -43,6 +43,18 @@ export default function CreateNoteModal({ onClose }: CreateNoteModalProps) {
       await createNote.mutateAsync(trimmed);
       onClose();
     } catch (err) {
+      // TypeError means fetch failed (network unreachable) — navigator.onLine
+      // can lag the DevTools offline simulation, so treat it as offline too.
+      if (!navigator.onLine || err instanceof TypeError) {
+        await queueOfflineRequest({
+          type: 'CREATE_NOTE',
+          payload: { noteBody: trimmed },
+          url: '/api/items/notes',
+          method: 'POST',
+        });
+        setIsQueued(true);
+        return;
+      }
       if (err instanceof ApiError) {
         setError(err.message);
       } else {

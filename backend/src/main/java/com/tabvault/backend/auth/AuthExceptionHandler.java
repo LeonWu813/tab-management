@@ -1,6 +1,8 @@
 package com.tabvault.backend.auth;
 
 import com.tabvault.backend.shared.error.ApiErrorResponse;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -10,6 +12,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Handles auth-specific exceptions and maps them to the standard error envelope.
  * These handlers take precedence over GlobalExceptionHandler for these types.
  */
+@Order(Ordered.HIGHEST_PRECEDENCE)
 @RestControllerAdvice
 public class AuthExceptionHandler {
 

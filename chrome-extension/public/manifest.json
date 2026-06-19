@@ -9,7 +9,9 @@
     "alarms",
     "notifications"
   ],
-  "host_permissions": [],
+  "host_permissions": [
+    "https://api.tab-vault.com/*"
+  ],
   "background": {
     "service_worker": "background/index.js",
     "type": "module"

@@ -60,8 +60,9 @@ export default function ShareTargetPage() {
         if (!cancelled) setStatus('saved');
       } catch (error) {
         if (!cancelled) {
-          if (error instanceof ApiError && error.status === 0) {
-            // Network failure — treat as offline
+          if (!navigator.onLine || error instanceof TypeError) {
+            // TypeError means fetch failed (network unreachable); navigator.onLine
+            // can lag DevTools offline simulation so check both.
             await queueOfflineRequest({
               type: 'SHARE_TARGET_SAVE',
               payload: { url: sharedUrl, title: sharedTitle || sharedUrl },

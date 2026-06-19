@@ -545,3 +545,64 @@ Browser installability check (optional, local):
 | AC-064 | N/A | AWAITING — TC-064 |
 
 **This module is NOT PASS. All pre-browser CLI checks now pass and both bugs are fixed. Human browser sign-off on all 9 ACs is required before this module can be marked PASS.**
+
+---
+
+## Browser Testing Sign-off — 2026-06-02
+
+**Performed by:** Human (Leon)
+**Build:** Production (`npm run build && npx serve dist -p 5174`)
+**Backend:** Spring Boot JAR on port 8080
+
+### Additional Bugs Found and Fixed During Browser Testing
+
+**BUG-3 — AC-017: `PATCH /api/items/{id}` endpoint missing from backend**
+- TC-017a inline title edit saved nothing — backend returned 404.
+- Fix: Added `UpdateItemRequest.java` DTO and `PATCH /api/items/{id}` endpoint in `ItemController.java`. Backend rebuilt with `./mvnw package -DskipTests`.
+- Files: `backend/src/main/java/com/tabvault/backend/items/UpdateItemRequest.java` (new), `backend/src/main/java/com/tabvault/backend/items/ItemController.java`
+
+**BUG-4 — AC-041: `CreateNoteModal.tsx` shows error instead of queued state when offline**
+- `navigator.onLine` can lag the DevTools offline simulation; fetch threw `TypeError` (not caught by the `!navigator.onLine` pre-check) and landed in the generic catch block showing "Failed to save note."
+- Fix: Added `!navigator.onLine || err instanceof TypeError` guard in the catch block to route to `queueOfflineRequest` instead of the error message.
+- File: `pwa-dashboard/src/dashboard/CreateNoteModal.tsx`
+
+**BUG-5 — AC-064: `ShareTargetPage.tsx` shows error instead of queued state when offline**
+- Same root cause as BUG-4. The catch block checked `error instanceof ApiError && error.status === 0`, which never matches a `TypeError` from a failed `fetch`.
+- Fix: Replaced check with `!navigator.onLine || error instanceof TypeError`.
+- File: `pwa-dashboard/src/share-target/ShareTargetPage.tsx`
+
+### Browser Test Results
+
+| Test Case | AC | Result |
+|---|---|---|
+| TC-014a — Category filter | AC-014 | PASS |
+| TC-014b — Content type filter | AC-014 | PASS |
+| TC-014c — Date range filter | AC-014 | PASS |
+| TC-014d — Tag filter | AC-014 | PASS |
+| TC-014e — Combined filters | AC-014 | PASS |
+| TC-015 — Search | AC-015 | PASS |
+| TC-016 — Grid/list toggle persisted | AC-016 | PASS |
+| TC-017a — Inline title edit | AC-017 | PASS (after BUG-3 fix + backend rebuild) |
+| TC-017b — Inline summary edit | AC-017 | PASS |
+| TC-017c — Inline category assignment | AC-017 | PASS |
+| TC-040 — Offline cached item display | AC-040 | PASS |
+| TC-041 — Offline note queue | AC-041 | PASS (after BUG-4 fix) |
+| TC-042 — Share Target manifest | AC-042 | PASS |
+| TC-043 — Share Target URL save | AC-043 | PASS |
+| TC-064 — Share Target offline queue | AC-064 | PASS (after BUG-5 fix) |
+
+### Final Sign-off Status
+
+| AC | CLI Status | Browser Status |
+|---|---|---|
+| AC-014 | PASS | PASS — TC-014a through TC-014e |
+| AC-015 | N/A | PASS — TC-015 |
+| AC-016 | N/A | PASS — TC-016 |
+| AC-017 | N/A | PASS — TC-017a, TC-017b, TC-017c |
+| AC-040 | PASS | PASS — TC-040 |
+| AC-041 | N/A | PASS — TC-041 |
+| AC-042 | PASS (manifest) | PASS — TC-042 |
+| AC-043 | N/A | PASS — TC-043 |
+| AC-064 | N/A | PASS — TC-064 |
+
+**Overall result: PASS — all 9 ACs verified. MOD-008 complete.**

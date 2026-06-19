@@ -1,11 +1,13 @@
 #!/bin/sh
-# Maven wrapper script
-# This script downloads Maven if not present and runs it.
+# Real Maven wrapper — downloads Maven 3.9.9 on first run, then invokes it.
 
-MAVEN_WRAPPER_JAR=".mvn/wrapper/maven-wrapper.jar"
+set -e
+
 MAVEN_WRAPPER_PROPERTIES=".mvn/wrapper/maven-wrapper.properties"
+MAVEN_USER_HOME="${MAVEN_USER_HOME:-$HOME/.m2}"
+MAVEN_WRAPPER_JAR=".mvn/wrapper/maven-wrapper.jar"
 
-# Find java executable
+# Resolve java
 if [ -n "$JAVA_HOME" ]; then
     JAVACMD="$JAVA_HOME/bin/java"
 else
@@ -17,4 +19,31 @@ if ! command -v "$JAVACMD" > /dev/null 2>&1; then
     exit 1
 fi
 
-exec "$JAVACMD" -jar "$MAVEN_WRAPPER_JAR" "$@"
+# Read distributionUrl from properties file
+DISTRIBUTION_URL=$(grep '^distributionUrl' "$MAVEN_WRAPPER_PROPERTIES" | cut -d= -f2 | tr -d '[:space:]')
+MAVEN_DIST_NAME=$(basename "$DISTRIBUTION_URL" .zip)
+MAVEN_HOME="$MAVEN_USER_HOME/wrapper/dists/$MAVEN_DIST_NAME"
+
+if [ ! -d "$MAVEN_HOME" ]; then
+    echo "Downloading Maven from $DISTRIBUTION_URL ..."
+    mkdir -p "$MAVEN_HOME"
+    TEMP_ZIP="$MAVEN_HOME/maven.zip"
+    if command -v curl > /dev/null 2>&1; then
+        curl -fsSL -o "$TEMP_ZIP" "$DISTRIBUTION_URL"
+    elif command -v wget > /dev/null 2>&1; then
+        wget -q -O "$TEMP_ZIP" "$DISTRIBUTION_URL"
+    else
+        echo "Error: neither curl nor wget found." >&2
+        exit 1
+    fi
+    unzip -q "$TEMP_ZIP" -d "$MAVEN_HOME"
+    rm "$TEMP_ZIP"
+fi
+
+MAVEN_EXEC=$(find "$MAVEN_HOME" -name "mvn" -type f | head -1)
+if [ -z "$MAVEN_EXEC" ]; then
+    echo "Error: could not find mvn executable under $MAVEN_HOME" >&2
+    exit 1
+fi
+
+exec "$MAVEN_EXEC" "$@"
