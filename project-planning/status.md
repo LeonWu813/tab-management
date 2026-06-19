@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: qa-mod-pwa-dashboard
-mode: regression
-module: mod-pwa-dashboard
-result: bugs-found
-commit: ce84fd4ef822ff01b84461277d7258c37a1f742c
-timestamp: 2026-05-30T22:30:00Z
+agent: qa-mod-chrome-extension
+mode: verify
+module: mod-chrome-extension
+result: pending-browser-signoff
+commit: a7ae20b023e9d43f72669f667846b8ab7fb7caca
+timestamp: 2026-06-19T00:00:00Z
 
 ## Current Phase
 
