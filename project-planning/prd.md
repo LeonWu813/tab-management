@@ -1,4 +1,4 @@
-**Revision**: 3 | **Last Updated**: 2026-05-30
+**Revision**: 4 | **Last Updated**: 2026-06-19
 
 ---
 
@@ -88,7 +88,7 @@ The extension serves as the capture layer: one click (or keyboard shortcut) save
 **I want** to browse my saved items in the dashboard and search or filter them by title, summary, category, type, or tag,
 **so that** I can quickly locate a specific saved item without scrolling through everything I have saved.
 
-**Acceptance Criteria**: AC-014, AC-015, AC-016, AC-017
+**Acceptance Criteria**: AC-014, AC-015, AC-016, AC-017, AC-067, AC-068
 
 ---
 
@@ -536,3 +536,7 @@ The PWA dashboard is a single-page React application that serves as the primary 
 **AC-043**: The system shall save the shared URL as a new item and trigger the content analysis pipeline when a URL is received via the Share Target.
 
 **AC-064**: The system shall queue a Share Target URL in the service worker using the same offline queue mechanism as AC-041 and submit it to the backend when connectivity is restored, when a URL is received via the Share Target while the device has no internet connectivity.
+
+**AC-067**: The system shall display a confirmation prompt when the user activates the delete action on an item card, and shall call `DELETE /api/items/{id}` and remove the item from the dashboard view on confirmation.
+
+**AC-068**: The system shall group items by their assigned category in the dashboard view, displaying each group under a labeled section header; items with no assigned category shall appear under an "Uncategorized" group; each group section shall be collapsible.

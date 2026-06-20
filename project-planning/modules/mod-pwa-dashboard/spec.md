@@ -1,4 +1,4 @@
-**Last Synced from PRD Revision**: 2 | **Last Updated**: 2026-05-30
+**Last Synced from PRD Revision**: 4 | **Last Updated**: 2026-06-19
 
 ---
 
@@ -63,6 +63,8 @@ Provide a searchable dashboard that returns matching saved items within 3 second
 - The system shall register as a Share Target so that users can share a URL to TabVault from any mobile app via the native share sheet on a device with the PWA installed.
 - The system shall save the shared URL as a new item and trigger the content analysis pipeline when a URL is received via the Share Target.
 - The system shall queue a Share Target URL in the service worker using the same offline queue mechanism as AC-041 and submit it to the backend when connectivity is restored, when a URL is received via the Share Target while the device has no internet connectivity.
+- The system shall display a confirmation prompt when the user activates the delete action on an item card, and shall call DELETE /api/items/{id} and remove the item from the dashboard view on confirmation.
+- The system shall group items by their assigned category in the dashboard view, displaying each group under a labeled section header; items with no assigned category shall appear under an "Uncategorized" group; each group section shall be collapsible.
 
 ## Input / Output Contract
 
@@ -75,6 +77,8 @@ Provide a searchable dashboard that returns matching saved items within 3 second
 - Offline note creation: note body text submitted while device has no internet connectivity
 - Share Target URL: URL received from any mobile app via the native system share sheet
 - Share Target URL received offline: URL received via Share Target while device has no internet connectivity
+- Delete item action: user activates delete on an item card and confirms the confirmation prompt
+- Category grouping toggle: dashboard groups items by assigned category
 
 **Output:**
 
@@ -87,6 +91,8 @@ Provide a searchable dashboard that returns matching saved items within 3 second
 - Share Target registration: PWA registered as a Share Target on devices with the PWA installed
 - Share Target save: shared URL saved as new item; content analysis pipeline triggered
 - Share Target offline queue: Share Target URL queued in service worker using same mechanism as offline note queue; submitted to backend when connectivity is restored
+- Delete item: item removed from dashboard view after user confirms deletion; DELETE /api/items/{id} called
+- Category groups: dashboard displays items grouped by category under labeled section headers; items with no category appear under "Uncategorized"; each group is collapsible
 
 ## Dependencies
 
@@ -106,3 +112,5 @@ Provide a searchable dashboard that returns matching saved items within 3 second
 - AC-042: The system shall register as a Share Target so that users can share a URL to TabVault from any mobile app via the native share sheet on a device with the PWA installed.
 - AC-043: The system shall save the shared URL as a new item and trigger the content analysis pipeline when a URL is received via the Share Target.
 - AC-064: The system shall queue a Share Target URL in the service worker using the same offline queue mechanism as AC-041 and submit it to the backend when connectivity is restored, when a URL is received via the Share Target while the device has no internet connectivity.
+- AC-067: The system shall display a confirmation prompt when the user activates the delete action on an item card, and shall call `DELETE /api/items/{id}` and remove the item from the dashboard view on confirmation.
+- AC-068: The system shall group items by their assigned category in the dashboard view, displaying each group under a labeled section header; items with no assigned category shall appear under an "Uncategorized" group; each group section shall be collapsible.

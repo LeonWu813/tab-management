@@ -2,11 +2,11 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: qa-mod-chrome-extension
-mode: verify
-module: mod-chrome-extension
-result: pending-browser-signoff
-commit: a7ae20b023e9d43f72669f667846b8ab7fb7caca
+agent: pm
+mode: change
+module: n/a
+result: success
+commit: e98827f468001013294123d8ab3296d2c36adf3f
 timestamp: 2026-06-19T00:00:00Z
 
 ## Current Phase
@@ -37,6 +37,8 @@ Lint:
 Test:
 
 ## PM Updates
+
+2026-06-19 — [SUBSTANTIVE] PRD v4: added AC-067 (Delete Item) and AC-068 (Category Grouping) to MOD-008 (PWA Dashboard). AC-067 adds a delete button with confirmation prompt on each item card, calling the existing backend DELETE /api/items/{id} endpoint (already implemented in MOD-002). AC-068 adds category-grouped display in the dashboard, with collapsible section headers and an "Uncategorized" bucket for items with no category assigned. Both ACs added to US-005 reference list. No new modules, no new dependencies, no phase boundary changes. MOD-008 spec (project-planning/modules/mod-pwa-dashboard/spec.md) updated to match — Requirements, Input/Output Contract, and Acceptance Criteria sections all updated. Phase 1 definition of done expands to include AC-067 and AC-068.
 
 2026-05-30 — [TRIVIAL] MOD-001 spec gap logged (QA escalation). QA verified all MOD-001 ACs pass (first-time verification). Post-verification, QA identified a spec omission: project-planning/modules/mod-auth/spec.md Input/Output Contract lists only "valid email address, password of at least 8 characters" as registration inputs, but the output requires a displayName field and the implementation correctly requires displayName as mandatory input. This is a spec clarification only — the PRD requirement (AC-044) and the implementation are both correct; the spec's Input section simply omitted the field. Required fix: add "displayName: required string" to the registration Input line in project-planning/modules/mod-auth/spec.md. No modules, dependencies, phases, or PRD text are affected. This entry is the handoff instruction to Doc-Sync.
 
