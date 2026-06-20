@@ -105,7 +105,7 @@ export default function ItemCard({
       <div className="bg-white border border-gray-200 rounded-lg px-4 py-3 flex items-start gap-4 hover:border-gray-300 transition-colors">
         {/* Favicon / icon */}
         <div className="flex-shrink-0 w-8 h-8 mt-0.5">
-          {item.faviconUrl ? (
+          {item.faviconUrl?.startsWith('https://') ? (
             <img
               src={item.faviconUrl}
               alt=""
@@ -259,7 +259,7 @@ export default function ItemCard({
       {/* Header row */}
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          {item.faviconUrl ? (
+          {item.faviconUrl?.startsWith('https://') ? (
             <img
               src={item.faviconUrl}
               alt=""
