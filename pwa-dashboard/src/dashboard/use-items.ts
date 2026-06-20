@@ -87,3 +87,18 @@ export function useCreateNote() {
     },
   });
 }
+
+/**
+ * AC-067: Delete item mutation — calls DELETE /api/items/{id} and
+ * invalidates the items query to remove the item from the dashboard view.
+ */
+export function useDeleteItem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: number) =>
+      apiRequest<void>(`/api/items/${itemId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items'] });
+    },
+  });
+}

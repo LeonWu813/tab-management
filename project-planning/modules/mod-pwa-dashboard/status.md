@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Completed: 2026-05-30**
+**Completed: 2026-05-30 | AC-067 + AC-068 implemented: 2026-06-19**
 
 ### Implementation Summary
 
@@ -123,6 +123,31 @@ Implemented the full MOD-008 PWA Dashboard. All source files are in the feature-
 - No hardcoded values introduced: PASS — date range labels and option values are UI constants, not environment-specific config
 - No new dependencies: PASS — fix uses only existing React hooks and native JS Date API
 - Code conventions followed: PASS — new state, handlers, and helpers follow existing file conventions; AC-014 comments updated
+
+---
+
+### AC-067 + AC-068 Implementation Self-Check (2026-06-19)
+
+**New ACs implemented:**
+- AC-067: Delete item — confirmation prompt, DELETE /api/items/{id}, item removed from view on confirm
+- AC-068: Category grouping — items grouped by categoryId under labeled collapsible section headers; "Uncategorized" for null categoryId
+
+**Files modified:**
+- `pwa-dashboard/src/dashboard/use-items.ts` — added `useDeleteItem()` mutation: calls `DELETE /api/items/{id}`, invalidates `['items']` query on success
+- `pwa-dashboard/src/dashboard/ItemCard.tsx` — added `onDelete` prop; `isPendingDelete` state; inline "Delete? / Confirm / Cancel" confirmation UI in both list and grid footers; delete icon uses `text-highlight` (#f2836b); confirm button uses `bg-highlight text-white`
+- `pwa-dashboard/src/dashboard/DashboardPage.tsx` — imported `useDeleteItem` and `ItemResponse`; added `collapsedGroups` state (Set); `buildCategoryGroups()` function groups filtered items by categoryId, sorts by category sortOrder, appends uncategorized last; `toggleGroup()` function; replaced flat item grid with grouped `<section>` elements each with collapsible header (color dot, label, count, expand_more/expand_less chevron); passes `onDelete` callback to ItemCard; category filter dropdown still works (filters within groups)
+
+**Automated checks:**
+- Build (`npm run build` with `VITE_API_BASE_URL=https://api.tab-vault.com`): PASS — exits 0; `tsc` + vite build both pass; `dist/sw.js`, `dist/manifest.webmanifest`, `dist/index.html`, bundled assets produced; 119 modules transformed
+- TypeScript (`tsc` via build): PASS — zero type errors
+
+**Judgment-based items:**
+- AC-067 requirements met: PASS — confirmation prompt displayed inline (not modal) when delete icon clicked; "Confirm" calls `onDelete` (which triggers `deleteItem.mutate(itemId)` → `DELETE /api/items/{id}` → `invalidateQueries(['items'])` removes item from view); "Cancel" dismisses prompt; existing AC behavior unchanged
+- AC-068 requirements met: PASS — items grouped by category; "Uncategorized" group for null categoryId; each group has labeled header; headers are collapsible via `collapsedGroups` Set state with `aria-expanded` attribute; color dot shown when category has a color; category filter dropdown still applies (filters filteredItems before grouping)
+- Existing ACs not broken: PASS — AC-014 filter logic unchanged; AC-015 search unchanged; AC-016 grid/list toggle still applies inside each group; AC-017 inline edit props unchanged; AC-040/041/042/043/064 not touched; pin/archive display preserved
+- No hardcoded configurable values: PASS — group label "Uncategorized" is a UI constant; API path uses itemId from item data
+- No new dependencies outside tech stack: PASS — uses only existing React, TanStack Query, and Tailwind
+- Code conventions followed: PASS — camelCase functions, PascalCase component, descriptive names, AC reference comments, no silent catches
 
 ---
 

@@ -4,6 +4,8 @@
  * AC-017: Inline editing of title, summary, and category assignment — edits are
  *         saved without navigating to a separate detail page.
  * AC-024: Displays a reminder badge indicator when dueWithin24Hours is true.
+ * AC-067: Delete action with inline confirmation prompt — calls DELETE /api/items/{id}
+ *         on confirmation and removes the item from the dashboard view.
  */
 import { useState, useRef } from 'react';
 import type { ItemResponse, CategoryResponse, ReminderResponse } from '../api/types';
@@ -15,6 +17,8 @@ interface ItemCardProps {
   reminders: ReminderResponse[];
   viewMode: 'grid' | 'list';
   onVisit: (itemId: number) => void;
+  /** AC-067: Called when the user confirms deletion of this item. */
+  onDelete: (itemId: number) => void;
 }
 
 export default function ItemCard({
@@ -23,6 +27,7 @@ export default function ItemCard({
   reminders,
   viewMode,
   onVisit,
+  onDelete,
 }: ItemCardProps) {
   // Inline edit state for title and summary (AC-017)
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -32,6 +37,9 @@ export default function ItemCard({
   const [editSummary, setEditSummary] = useState(item.summary ?? '');
   const titleInputRef = useRef<HTMLInputElement>(null);
   const summaryInputRef = useRef<HTMLTextAreaElement>(null);
+
+  // AC-067: inline delete confirmation state
+  const [isPendingDelete, setIsPendingDelete] = useState(false);
 
   const updateCategory = useUpdateItemCategory();
   const updateTitle = useUpdateItemTitle();
@@ -214,7 +222,7 @@ export default function ItemCard({
             <p className="text-xs text-gray-600 mt-1 line-clamp-2 font-mono">{item.noteBody}</p>
           )}
 
-          <div className="flex items-center gap-3 mt-1.5">
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             {/* Category inline edit (AC-017) */}
             {isEditingCategory ? (
               <select
@@ -247,6 +255,37 @@ export default function ItemCard({
             <span className="text-xs text-gray-400">
               {new Date(item.createdAt).toLocaleDateString()}
             </span>
+
+            {/* AC-067: Delete action with inline confirmation */}
+            <span className="text-xs text-gray-300">·</span>
+            {isPendingDelete ? (
+              <span className="flex items-center gap-1">
+                <span className="text-xs text-gray-500">Delete?</span>
+                <button
+                  onClick={() => onDelete(item.id)}
+                  className="text-xs bg-highlight text-white px-1.5 py-0.5 rounded hover:opacity-90 transition-opacity"
+                  aria-label="Confirm delete"
+                >
+                  Confirm
+                </button>
+                <button
+                  onClick={() => setIsPendingDelete(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 transition-colors"
+                  aria-label="Cancel delete"
+                >
+                  Cancel
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={() => setIsPendingDelete(true)}
+                className="text-highlight hover:opacity-75 transition-opacity"
+                aria-label={`Delete ${item.title ?? 'item'}`}
+                title="Delete item"
+              >
+                <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -361,7 +400,7 @@ export default function ItemCard({
       )}
 
       {/* Footer */}
-      <div className="mt-auto pt-2 flex items-center justify-between">
+      <div className="mt-auto pt-2 flex items-center justify-between gap-2">
         {/* Category inline edit (AC-017) */}
         {isEditingCategory ? (
           <select
@@ -390,9 +429,41 @@ export default function ItemCard({
           </button>
         )}
 
-        <span className="text-xs text-gray-400 flex-shrink-0">
-          {new Date(item.createdAt).toLocaleDateString()}
-        </span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-xs text-gray-400">
+            {new Date(item.createdAt).toLocaleDateString()}
+          </span>
+
+          {/* AC-067: Delete action with inline confirmation */}
+          {isPendingDelete ? (
+            <span className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">Delete?</span>
+              <button
+                onClick={() => onDelete(item.id)}
+                className="text-xs bg-highlight text-white px-1.5 py-0.5 rounded hover:opacity-90 transition-opacity"
+                aria-label="Confirm delete"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setIsPendingDelete(false)}
+                className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 transition-colors"
+                aria-label="Cancel delete"
+              >
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button
+              onClick={() => setIsPendingDelete(true)}
+              className="text-highlight hover:opacity-75 transition-opacity"
+              aria-label={`Delete ${item.title ?? 'item'}`}
+              title="Delete item"
+            >
+              <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

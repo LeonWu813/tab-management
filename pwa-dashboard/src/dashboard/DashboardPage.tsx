@@ -6,15 +6,17 @@
  * AC-015: Returns search results within 3 seconds (search is debounced 300ms; backend handles query).
  * AC-016: Grid/list toggle with persisted view preference.
  * AC-017: Inline category editing on item cards.
+ * AC-067: Delete item with confirmation prompt — calls DELETE /api/items/{id} on confirmation.
+ * AC-068: Items grouped by assigned category under labeled collapsible section headers.
  */
 import { useState, useEffect } from 'react';
-import { useItems, useCategories, useRecordVisit } from './use-items';
+import { useItems, useCategories, useRecordVisit, useDeleteItem } from './use-items';
 import { useViewPreference } from './use-view-preference';
 import ItemCard from './ItemCard';
 import CreateNoteModal from './CreateNoteModal';
 import { useQuery } from '@tanstack/react-query';
 import { apiRequest } from '../api/api-client';
-import type { ReminderResponse } from '../api/types';
+import type { ItemResponse, ReminderResponse } from '../api/types';
 
 const DEBOUNCE_DELAY_MS = 300;
 
@@ -83,6 +85,8 @@ export default function DashboardPage() {
   const [currentPage, setCurrentPage] = useState(0);
   const [viewMode, setViewMode] = useViewPreference();
   const [showCreateNote, setShowCreateNote] = useState(false);
+  // AC-068: tracks which category group sections are collapsed (by group key)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   const debouncedQuery = useDebounce(searchQuery, DEBOUNCE_DELAY_MS);
   const debouncedTagFilter = useDebounce(tagFilter, DEBOUNCE_DELAY_MS);
@@ -103,6 +107,7 @@ export default function DashboardPage() {
   });
 
   const recordVisit = useRecordVisit();
+  const deleteItem = useDeleteItem();
 
   // Client-side filter by category, item type, date range, and tag (AC-014)
   const allItems = itemsPage?.content ?? [];
@@ -119,6 +124,70 @@ export default function DashboardPage() {
     }
     return true;
   });
+
+  /**
+   * AC-068: Group filtered items by categoryId.
+   * Returns an ordered array of groups — categorized groups first (sorted by category sortOrder),
+   * then the "Uncategorized" group last.
+   */
+  function buildCategoryGroups(items: ItemResponse[]): Array<{
+    groupKey: string;
+    label: string;
+    color: string | null;
+    groupItems: ItemResponse[];
+  }> {
+    const groupMap = new Map<string, { label: string; color: string | null; groupItems: ItemResponse[] }>();
+
+    for (const item of items) {
+      if (item.categoryId !== null) {
+        const cat = categories.find((c) => c.id === item.categoryId);
+        const key = `cat-${item.categoryId}`;
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { label: cat?.name ?? `Category ${item.categoryId}`, color: cat?.color ?? null, groupItems: [] });
+        }
+        groupMap.get(key)!.groupItems.push(item);
+      } else {
+        const key = 'uncategorized';
+        if (!groupMap.has(key)) {
+          groupMap.set(key, { label: 'Uncategorized', color: null, groupItems: [] });
+        }
+        groupMap.get(key)!.groupItems.push(item);
+      }
+    }
+
+    // Sort categorized groups by their category sortOrder, then append uncategorized at end
+    const categorizedGroups = [...groupMap.entries()]
+      .filter(([key]) => key !== 'uncategorized')
+      .sort(([keyA], [keyB]) => {
+        const idA = parseInt(keyA.replace('cat-', ''), 10);
+        const idB = parseInt(keyB.replace('cat-', ''), 10);
+        const sortA = categories.find((c) => c.id === idA)?.sortOrder ?? 0;
+        const sortB = categories.find((c) => c.id === idB)?.sortOrder ?? 0;
+        return sortA - sortB;
+      })
+      .map(([groupKey, value]) => ({ groupKey, ...value }));
+
+    const uncategorizedEntry = groupMap.get('uncategorized');
+    if (uncategorizedEntry) {
+      categorizedGroups.push({ groupKey: 'uncategorized', ...uncategorizedEntry });
+    }
+
+    return categorizedGroups;
+  }
+
+  const categoryGroups = buildCategoryGroups(filteredItems);
+
+  function toggleGroup(groupKey: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupKey)) {
+        next.delete(groupKey);
+      } else {
+        next.add(groupKey);
+      }
+      return next;
+    });
+  }
 
   function handleSearchChange(event: React.ChangeEvent<HTMLInputElement>) {
     setSearchQuery(event.target.value);
@@ -363,25 +432,68 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Item grid or list */}
+      {/* Item groups — AC-068: grouped by category under collapsible labeled section headers */}
       {!isLoading && filteredItems.length > 0 && (
-        <div
-          className={
-            viewMode === 'grid'
-              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
-              : 'space-y-2'
-          }
-        >
-          {filteredItems.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              categories={categories}
-              reminders={reminders}
-              viewMode={viewMode}
-              onVisit={(itemId) => recordVisit.mutate(itemId)}
-            />
-          ))}
+        <div className="space-y-6">
+          {categoryGroups.map(({ groupKey, label, color, groupItems }) => {
+            const isCollapsed = collapsedGroups.has(groupKey);
+            return (
+              <section key={groupKey} aria-label={`Category group: ${label}`}>
+                {/* Group header — collapsible (AC-068) */}
+                <button
+                  onClick={() => toggleGroup(groupKey)}
+                  className="flex items-center gap-2 w-full text-left mb-3 group"
+                  aria-expanded={!isCollapsed}
+                  aria-controls={`group-items-${groupKey}`}
+                >
+                  {color && (
+                    <span
+                      className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: color }}
+                      aria-hidden="true"
+                    />
+                  )}
+                  <span className="text-sm font-semibold text-dark/60 uppercase tracking-wide">
+                    {label}
+                  </span>
+                  <span className="text-xs text-gray-400 font-normal normal-case tracking-normal">
+                    ({groupItems.length})
+                  </span>
+                  <span
+                    className="material-symbols-outlined text-dark/40 group-hover:text-dark/60 transition-colors ml-auto"
+                    style={{ fontSize: '18px' }}
+                    aria-hidden="true"
+                  >
+                    {isCollapsed ? 'expand_more' : 'expand_less'}
+                  </span>
+                </button>
+
+                {/* Group items */}
+                {!isCollapsed && (
+                  <div
+                    id={`group-items-${groupKey}`}
+                    className={
+                      viewMode === 'grid'
+                        ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+                        : 'space-y-2'
+                    }
+                  >
+                    {groupItems.map((item) => (
+                      <ItemCard
+                        key={item.id}
+                        item={item}
+                        categories={categories}
+                        reminders={reminders}
+                        viewMode={viewMode}
+                        onVisit={(itemId) => recordVisit.mutate(itemId)}
+                        onDelete={(itemId) => deleteItem.mutate(itemId)}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 
