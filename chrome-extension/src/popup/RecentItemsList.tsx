@@ -18,10 +18,7 @@ export function RecentItemsList({ items, isLoading }: RecentItemsListProps): Rea
   if (isLoading) {
     return (
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>
-          <span className="material-symbols-outlined" style={{fontSize:'13px', marginRight:4}}>history</span>
-          Recent saves
-        </h2>
+        <h2 style={styles.sectionTitle}>Recent saves</h2>
         <p style={styles.emptyText}>Loading…</p>
       </div>
     );
@@ -30,10 +27,7 @@ export function RecentItemsList({ items, isLoading }: RecentItemsListProps): Rea
   if (items.length === 0) {
     return (
       <div style={styles.section}>
-        <h2 style={styles.sectionTitle}>
-          <span className="material-symbols-outlined" style={{fontSize:'13px', marginRight:4}}>history</span>
-          Recent saves
-        </h2>
+        <h2 style={styles.sectionTitle}>Recent saves</h2>
         <p style={styles.emptyText}>No saved items yet.</p>
       </div>
     );
@@ -41,10 +35,7 @@ export function RecentItemsList({ items, isLoading }: RecentItemsListProps): Rea
 
   return (
     <div style={styles.section}>
-      <h2 style={styles.sectionTitle}>
-        <span className="material-symbols-outlined" style={{fontSize:'13px', marginRight:4}}>history</span>
-        Recent saves
-      </h2>
+      <h2 style={styles.sectionTitle}>Recent saves</h2>
       <ul style={styles.list} role="list">
         {items.map((item) => (
           <RecentItemRow key={item.id} item={item} />
@@ -86,9 +77,6 @@ function RecentItemRow({ item }: RecentItemRowProps): React.ReactElement {
         disabled={!item.url}
       >
         {/* Item type icon via Material Symbols */}
-        <span className="material-symbols-outlined" style={styles.itemIcon} aria-hidden="true">
-          {item.itemType === "NOTE" ? "note" : "link"}
-        </span>
         <span style={styles.itemText}>
           <span style={styles.itemTitle}>{truncateTitle(displayTitle, 50)}</span>
           <span style={styles.itemTime}>{relativeTime}</span>
@@ -119,8 +107,12 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#888",
     marginBottom: 6,
     padding: "0 16px",
-    display: "flex",
-    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 12,
+    color: "#888",
+    padding: "4px 16px 12px",
+    margin: 0,
   },
   list: {
     listStyle: "none",
@@ -141,11 +133,6 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "left",
     fontSize: 13,
     color: "#0d0d0d",
-  },
-  itemIcon: {
-    fontSize: 14,
-    flexShrink: 0,
-    color: "#c4a96e",
   },
   itemText: {
     display: "flex",

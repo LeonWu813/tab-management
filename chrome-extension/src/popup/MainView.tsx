@@ -122,7 +122,7 @@ export function MainView({
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.logoRow}>
-          <img src="../icons/icon32.png" alt="" style={styles.logo} />
+          <div style={styles.logoDot} />
           <a
             href="https://tab-vault.com"
             target="_blank"
@@ -136,7 +136,6 @@ export function MainView({
           type="button"
           title="Sign out"
         >
-          <span className="material-symbols-outlined" style={{fontSize:'16px', marginRight:3}}>logout</span>
           Sign out
         </button>
       </div>
@@ -152,7 +151,6 @@ export function MainView({
           }}
           type="button"
         >
-          <span className="material-symbols-outlined" style={{fontSize:'16px', marginRight:6}}>save</span>
           {isSaving ? "Saving…" : "Save current tab"}
         </button>
 
@@ -177,7 +175,6 @@ export function MainView({
             }}
             type="button"
           >
-            <span className="material-symbols-outlined" style={{fontSize:'14px', marginRight:4}}>note_add</span>
             Quick note
           </button>
         </div>
@@ -199,8 +196,7 @@ export function MainView({
 
       {/* Keyboard shortcuts hint */}
       <div style={styles.shortcutsHint}>
-        <span className="material-symbols-outlined" style={{fontSize:'12px', marginRight:3}}>keyboard</span>
-        <span>Save tab: Ctrl+Shift+S / ⌘+Shift+S</span>
+        Save tab: Ctrl+Shift+S / ⌘+Shift+S
       </div>
 
       {/* Recent saves list — AC-048 */}
@@ -231,9 +227,12 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 8,
   },
-  logo: {
-    width: 24,
-    height: 24,
+  logoDot: {
+    width: 20,
+    height: 20,
+    borderRadius: "50%",
+    background: "#D9C196",
+    flexShrink: 0,
   },
   appName: {
     fontSize: 16,
