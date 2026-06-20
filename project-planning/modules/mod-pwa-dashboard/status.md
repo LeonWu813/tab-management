@@ -631,3 +631,214 @@ Browser installability check (optional, local):
 | AC-064 | N/A | PASS — TC-064 |
 
 **Overall result: PASS — all 9 ACs verified. MOD-008 complete.**
+
+---
+
+## QA Regression Run: 2026-06-20 — AC-067 + AC-068 + Full Regression
+
+**QA Agent:** qa-mod-pwa-dashboard
+**Mode:** regression
+**Spec revision verified against:** PRD Revision 4
+**Scope:** AC-067 (delete item), AC-068 (category grouping), and regression check on all previously passing ACs (AC-014, AC-015, AC-016, AC-017, AC-040, AC-041, AC-042, AC-043, AC-064).
+
+---
+
+### CLI Verification Results
+
+| Check | Result | Notes |
+|---|---|---|
+| Build (`npm run build`) | PASS | Exits 0. 119 modules transformed. `dist/sw.js`, `dist/manifest.webmanifest`, `dist/index.html`, `dist/assets/index-7lrLrHPj.css`, `dist/assets/index-8NGPmPVX.js` produced. Build time ~915ms. |
+| TypeScript (`npx tsc --noEmit`) | PASS | Zero output — zero type errors. |
+| `share_target` in built manifest | PASS | `dist/manifest.webmanifest` contains `"share_target":{"action":"/share-target","method":"GET","params":{"title":"title","text":"text","url":"url"}}` (AC-042). |
+| SW pathname patterns in dist/sw.js | PASS | No `localhost` in Workbox route patterns. Three `pathname.startsWith` patterns confirmed in built `dist/sw.js`: `/api/items`, `/api/categories`, `/api/reminders` (AC-040, BUG-2 fix intact). |
+| `useDeleteItem()` in use-items.ts | PASS | `useDeleteItem()` exported from `pwa-dashboard/src/dashboard/use-items.ts` (lines 95–104). Calls `DELETE /api/items/${itemId}` via `apiRequest`. Calls `queryClient.invalidateQueries({ queryKey: ['items'] })` on success — removes item from dashboard view (AC-067). |
+| Delete confirmation UI in ItemCard | PASS | `ItemCard.tsx` has `isPendingDelete` state (line 42). Delete button sets `isPendingDelete(true)`. Confirmation renders "Delete?" text, "Confirm" button (`onClick={() => onDelete(item.id)}`), and "Cancel" button (`onClick={() => setIsPendingDelete(false)}`). Implemented in both list view (lines 261–288) and grid view (lines 438–465). `onDelete` prop declared on line 21 and destructured on line 30 (AC-067). |
+| `buildCategoryGroups()` in DashboardPage | PASS | `buildCategoryGroups()` (lines 133–176) groups items by `categoryId`. Items with `categoryId !== null` keyed as `cat-${categoryId}`; items with `categoryId === null` keyed as `uncategorized` and labeled "Uncategorized" (AC-068). Uncategorized group appended last (line 172). Categorized groups sorted by `sortOrder` (lines 159–168). |
+| Collapsible group headers in DashboardPage | PASS | Each group renders a `<button>` with `aria-expanded={!isCollapsed}` and `aria-controls` (lines 443–469). `toggleGroup()` toggles the group key in `collapsedGroups` Set (lines 180–190). `expand_more` icon shown when collapsed; `expand_less` when expanded (line 467). Items div hidden when collapsed (line 472). Color dot rendered when `color` is truthy (lines 449–455). Group item count rendered (lines 459–462) (AC-068). |
+| `onDelete` wired in DashboardPage | PASS | `DashboardPage.tsx` imports `useDeleteItem` (line 13) and calls `useDeleteItem()` (line 110). Passes `onDelete={(itemId) => deleteItem.mutate(itemId)}` to each `<ItemCard>` (line 489) (AC-067). |
+| BUG-1 regression: date range + tag filters | PASS | `selectedDateRange` state, `DATE_RANGE_OPTIONS`, `dateRangeThreshold()`, and `tagFilter` state all present and wired into `filteredItems` (DashboardPage.tsx lines 46–51, 58–75, 82–84, 115–126). Active filter chips with clear buttons present for both (AC-014). |
+| BUG-2 regression: Workbox patterns | PASS | `vite.config.ts` lines 20, 33, 46 use path-based function patterns (`url.pathname.startsWith`). No `localhost` in `dist/sw.js` Workbox patterns (AC-040). |
+| BUG-4 regression: offline note queue | PASS | `CreateNoteModal.tsx` catch block (line 48): `if (!navigator.onLine \|\| err instanceof TypeError)` routes to `queueOfflineRequest` (AC-041). |
+| BUG-5 regression: offline share-target queue | PASS | `ShareTargetPage.tsx` catch block (line 63): `if (!navigator.onLine \|\| error instanceof TypeError)` routes to `queueOfflineRequest` (AC-064). |
+| Offline queue mechanism unchanged | PASS | `offline-queue.ts` exports `queueOfflineRequest` supporting types `'CREATE_NOTE'` and `'SHARE_TARGET_SAVE'`. Same postMessage + Background Sync + localStorage fallback mechanism. `flushLocalQueue` present (AC-041, AC-064). |
+| `DELETE /api/items/{id}` 204 handling | PASS | `api-client.ts` line 157–159: `response.status === 204` returns `undefined as T` without calling `response.json()`. `useDeleteItem` uses `apiRequest<void>` — correct for a 204 No Content response (AC-067). |
+
+---
+
+### AC-067 Detailed Verification
+
+**Spec requirement:** "The system shall display a confirmation prompt when the user activates the delete action on an item card, and shall call `DELETE /api/items/{id}` and remove the item from the dashboard view on confirmation."
+
+**Verified behavior (source inspection):**
+
+1. Delete button present on ItemCard in both grid and list view (`title="Delete item"`, `aria-label="Delete {item.title}"`). Uses `material-symbols-outlined` delete icon with `text-highlight` color class.
+2. Clicking the delete button sets `isPendingDelete(true)` — triggers the inline confirmation UI.
+3. Confirmation UI renders three elements: "Delete?" label, "Confirm" button, "Cancel" button. This satisfies the "confirmation prompt" requirement.
+4. "Confirm" button calls `onDelete(item.id)` which resolves to `deleteItem.mutate(itemId)` in DashboardPage.
+5. `deleteItem.mutate(itemId)` calls `apiRequest<void>('/api/items/${itemId}', { method: 'DELETE' })` — correct HTTP method and path.
+6. `onSuccess` calls `queryClient.invalidateQueries({ queryKey: ['items'] })` — causes TanStack Query to re-fetch the items list, removing the deleted item from the UI. This satisfies "removes the item from the dashboard view on confirmation."
+7. "Cancel" button calls `setIsPendingDelete(false)` — dismisses the confirmation without deleting.
+8. `apiRequest` handles 204 No Content by returning `undefined as T` without JSON parsing — correct for DELETE.
+
+**AC-067 result: PASS (source-verified). Browser sign-off required.**
+
+---
+
+### AC-068 Detailed Verification
+
+**Spec requirement:** "The system shall group items by their assigned category in the dashboard view, displaying each group under a labeled section header; items with no assigned category shall appear under an 'Uncategorized' group; each group section shall be collapsible."
+
+**Verified behavior (source inspection):**
+
+1. `buildCategoryGroups(filteredItems)` processes all filtered items and groups them by `categoryId`. Items with `categoryId !== null` are placed under `cat-${categoryId}` groups with the category name as label. Items with `categoryId === null` are placed under `uncategorized` group labeled "Uncategorized".
+2. Categorized groups are sorted by `category.sortOrder` before rendering. The "Uncategorized" group is always appended last — satisfies the "Uncategorized shown last" requirement.
+3. Each group renders as a `<section>` with `aria-label="Category group: {label}"`.
+4. Each group header is a `<button>` — clicking it calls `toggleGroup(groupKey)`.
+5. `toggleGroup` adds/removes the `groupKey` from the `collapsedGroups` Set — satisfies the "collapsible" requirement.
+6. Header displays: color dot (when `color` is truthy), group label text, item count in parentheses, and chevron icon (`expand_more` when collapsed, `expand_less` when expanded). All three named elements from spec are present: chevron, color dot, group item count.
+7. `aria-expanded={!isCollapsed}` is set on the header button — correct ARIA semantics.
+8. Items container hidden via React conditional `{!isCollapsed && <div ...>}` — items disappear when group is collapsed.
+9. Group items use existing `viewMode` (grid/list) and pass `onVisit`/`onDelete` — AC-016 and AC-067 remain functional within groups.
+10. Category filter (`selectedCategoryId`) filters `filteredItems` before `buildCategoryGroups` is called — when a category is selected, only that category's items remain in `filteredItems`, so `buildCategoryGroups` produces one group.
+
+**AC-068 result: PASS (source-verified). Browser sign-off required.**
+
+---
+
+### Regression Check: Previously Passing ACs (AC-014 through AC-064)
+
+All previously passing ACs verified to be unaffected by the AC-067/AC-068 changes:
+
+- **AC-014**: Filter logic in `filteredItems` (lines 115–126) is unchanged. Grouping is applied to `filteredItems` after filtering — all four filters (category, type, date, tag) still work.
+- **AC-015**: Search debounce and `useItems({ query })` call unchanged. Not touched by AC-067/AC-068 changes.
+- **AC-016**: `viewMode` applied inside each group's items container (line 476). Grid/list toggle works within groups.
+- **AC-017**: `ItemCard` `onVisit`, `isEditingTitle`, `isEditingSummary`, `isEditingCategory`, `updateCategory`, `updateTitle` — all unchanged. New `onDelete` prop is additive only.
+- **AC-040**: `vite.config.ts` Workbox patterns unchanged. BUG-2 fix intact.
+- **AC-041**: `CreateNoteModal.tsx` offline guard unchanged. BUG-4 fix intact.
+- **AC-042**: `manifest.webmanifest` `share_target` field unchanged in built output.
+- **AC-043**: `ShareTargetPage.tsx` online save path unchanged.
+- **AC-064**: `ShareTargetPage.tsx` offline guard (BUG-5 fix) intact. Same queue mechanism.
+
+**No regressions detected in previously passing ACs.**
+
+---
+
+### Browser Test Cases for AC-067 and AC-068
+
+These browser test cases must be executed against the running application before this regression can be declared fully PASS. Use the same prerequisites from the earlier browser test script (backend on port 8080, `npm run dev` on port 5173, seed data with items in multiple categories including items with no category assigned).
+
+#### TC-067a — AC-067: Delete button visible on item card
+
+1. On the dashboard, open an item in either grid or list view.
+2. Verify: A delete icon button is visible on the item card (trash/delete icon, colored in highlight color #f2836b).
+3. Verify: The button has `title="Delete item"` tooltip text visible on hover.
+
+---
+
+#### TC-067b — AC-067: Confirmation prompt on delete click
+
+1. Click the delete icon on any item card.
+2. Verify: The delete icon is replaced inline by: "Delete?" text, a "Confirm" button (highlight background), and a "Cancel" button (gray border).
+3. Verify: No full-page modal or navigation occurs — the confirmation is inline within the item card.
+4. Click "Cancel".
+5. Verify: The confirmation UI disappears and the delete icon is restored. The item remains in the list.
+
+---
+
+#### TC-067c — AC-067: Confirmed deletion calls DELETE and removes item
+
+1. Note the current total number of items visible.
+2. Click the delete icon on any item card.
+3. In Chrome DevTools Network tab, watch for outgoing requests.
+4. Click "Confirm".
+5. Verify: A `DELETE /api/items/{id}` request was made (visible in DevTools Network tab with 200 or 204 status).
+6. Verify: The item disappears from the dashboard list.
+7. Verify: The remaining item count is one fewer than before deletion.
+8. Reload the page.
+9. Verify: The deleted item does not reappear (deletion is persisted in the backend).
+
+---
+
+#### TC-067d — AC-067: Delete confirmation in both grid and list view
+
+1. Switch to List view. Click delete on an item. Verify: Inline confirmation appears in list row. Confirm. Verify: item removed.
+2. Switch to Grid view. Click delete on an item. Verify: Inline confirmation appears in grid card footer. Confirm. Verify: item removed.
+
+---
+
+#### TC-068a — AC-068: Items grouped by category under labeled section headers
+
+1. Ensure the seed data contains items in at least two named categories and at least one item with no category assigned.
+2. Open the dashboard (no filters active).
+3. Verify: Items are displayed in grouped sections, each with a visible section header label (category name or "Uncategorized").
+4. Verify: Each item appears under the header that matches its assigned category.
+5. Verify: Items with no assigned category appear under the "Uncategorized" header.
+
+---
+
+#### TC-068b — AC-068: "Uncategorized" group appears last
+
+1. With multiple category groups visible, locate the "Uncategorized" group.
+2. Verify: The "Uncategorized" section header appears after all named category sections — it is the last group in the list.
+
+---
+
+#### TC-068c — AC-068: Collapsible group header with chevron
+
+1. Locate any category group header.
+2. Verify: The header contains a chevron icon (pointing up — `expand_less` — when the group is expanded).
+3. Click the header.
+4. Verify: The group's items collapse (disappear). The chevron icon changes to point down (`expand_more`).
+5. Click the header again.
+6. Verify: The group's items expand (reappear). The chevron icon changes back to pointing up.
+7. Verify: No page navigation occurs during collapse/expand.
+
+---
+
+#### TC-068d — AC-068: Color dot on category group header
+
+1. Create a category with a non-null color (e.g., red "#ff0000") in the Categories page.
+2. Assign at least one item to that category.
+3. Return to the dashboard.
+4. Locate the group header for that category.
+5. Verify: A small color dot (approximately 10x10px circle) with the category's color is displayed to the left of the category name in the group header.
+6. Verify: The "Uncategorized" group header does not show a color dot (no color assigned to uncategorized).
+
+---
+
+#### TC-068e — AC-068: Group item count in header
+
+1. On the dashboard, locate any category group header.
+2. Count the items visible under that group.
+3. Verify: The header shows a parenthetical count (e.g., "(3)") matching the number of items in the group.
+4. Apply a filter (e.g., content type = "Links") that reduces the items in that group.
+5. Verify: The count in the group header updates to reflect the filtered item count.
+
+---
+
+#### TC-068f — AC-068: Category filter still works with grouping active
+
+1. On the dashboard, select a specific category from the "All categories" dropdown filter.
+2. Verify: Only items from the selected category are displayed. A single group section is shown for that category — all other category groups disappear.
+3. Clear the category filter.
+4. Verify: All category groups return.
+
+---
+
+### Regression Sign-off Table
+
+| AC | Description | CLI Status | Browser Status |
+|---|---|---|---|
+| AC-014 | Filter by category, content type, date range, tag | PASS | PASS (prior sign-off 2026-06-02) — no regression found |
+| AC-015 | Search returns results within 3 seconds | N/A | PASS (prior sign-off 2026-06-02) — not touched |
+| AC-016 | Grid/list toggle persisted | N/A | PASS (prior sign-off 2026-06-02) — works within groups |
+| AC-017 | Inline editing of title, summary, category | N/A | PASS (prior sign-off 2026-06-02) — ItemCard props unchanged |
+| AC-040 | Offline service worker cache | PASS | PASS (prior sign-off 2026-06-02) — BUG-2 fix intact |
+| AC-041 | Offline note creation queue | N/A | PASS (prior sign-off 2026-06-02) — BUG-4 fix intact |
+| AC-042 | Share Target manifest registration | PASS | PASS (prior sign-off 2026-06-02) — manifest unchanged |
+| AC-043 | Share Target save + content analysis | N/A | PASS (prior sign-off 2026-06-02) — not touched |
+| AC-064 | Share Target offline queue | N/A | PASS (prior sign-off 2026-06-02) — BUG-5 fix intact |
+| AC-067 | Delete item with confirmation prompt | PASS (source) | AWAITING — TC-067a through TC-067d |
+| AC-068 | Category grouping with collapsible headers | PASS (source) | AWAITING — TC-068a through TC-068f |
+
+**Overall result: PASS on all CLI-verifiable checks. No regressions in AC-014 through AC-064. AC-067 and AC-068 are source-verified PASS. Human browser sign-off on TC-067a–TC-067d and TC-068a–TC-068f required before this regression can be declared fully closed.**
