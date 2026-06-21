@@ -38,6 +38,7 @@ import java.util.List;
  *   POST   /api/items/{id}/visit                  — update last_visited_at
  *   PATCH  /api/items/{id}                        — partial update: title, summary, categoryId
  *   PATCH  /api/items/{id}/category               — reassign category (AC-020)
+ *   DELETE /api/items/{id}                        — delete item permanently (AC-067)
  *   POST   /api/categories                        — create category (AC-018)
  *   GET    /api/categories                        — list categories
  *   DELETE /api/categories/{id}                   — delete category + reassign items (AC-019)
@@ -242,6 +243,21 @@ public class ItemController {
 
         List<CategoryResponse> categories = itemService.listCategories(userId);
         return ResponseEntity.ok(categories);
+    }
+
+    /**
+     * Permanently deletes an item.
+     *
+     * AC-067: Removes the item from the database.
+     */
+    @Operation(summary = "Delete an item permanently")
+    @DeleteMapping("/items/{id}")
+    public ResponseEntity<Void> deleteItem(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long id) {
+
+        itemService.deleteItem(userId, id);
+        return ResponseEntity.noContent().build();
     }
 
     /**

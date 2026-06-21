@@ -293,6 +293,23 @@ public class ItemService {
     }
 
     /**
+     * Permanently deletes an item owned by the user.
+     *
+     * AC-067: The item is removed from the database and no longer appears in the dashboard.
+     *
+     * @param userId the authenticated user's ID
+     * @param itemId the ID of the item to delete
+     * @throws ItemNotFoundException if the item does not exist or belongs to a different user
+     */
+    @Transactional
+    public void deleteItem(Long userId, Long itemId) {
+        Item item = itemRepository.findByIdAndUserId(itemId, userId)
+                .orElseThrow(() -> new ItemNotFoundException("Item not found: " + itemId));
+        itemRepository.delete(item);
+        logger.info("Item deleted userId={} itemId={}", userId, itemId);
+    }
+
+    /**
      * Partially updates an item's title, summary, and/or categoryId.
      *
      * Only fields present (non-null) in the request are applied; absent fields are left unchanged.

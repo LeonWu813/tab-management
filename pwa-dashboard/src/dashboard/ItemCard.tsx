@@ -4,8 +4,7 @@
  * AC-017: Inline editing of title, summary, and category assignment — edits are
  *         saved without navigating to a separate detail page.
  * AC-024: Displays a reminder badge indicator when dueWithin24Hours is true.
- * AC-067: Delete action with inline confirmation prompt — calls DELETE /api/items/{id}
- *         on confirmation and removes the item from the dashboard view.
+ * AC-067: Delete action — calls DELETE /api/items/{id} immediately on click.
  */
 import { useState, useRef } from 'react';
 import type { ItemResponse, CategoryResponse, ReminderResponse } from '../api/types';
@@ -37,9 +36,6 @@ export default function ItemCard({
   const [editSummary, setEditSummary] = useState(item.summary ?? '');
   const titleInputRef = useRef<HTMLInputElement>(null);
   const summaryInputRef = useRef<HTMLTextAreaElement>(null);
-
-  // AC-067: inline delete confirmation state
-  const [isPendingDelete, setIsPendingDelete] = useState(false);
 
   const updateCategory = useUpdateItemCategory();
   const updateTitle = useUpdateItemTitle();
@@ -256,36 +252,17 @@ export default function ItemCard({
               {new Date(item.createdAt).toLocaleDateString()}
             </span>
 
-            {/* AC-067: Delete action with inline confirmation */}
+            {/* AC-067: Delete action */}
             <span className="text-xs text-gray-300">·</span>
-            {isPendingDelete ? (
-              <span className="flex items-center gap-1">
-                <span className="text-xs text-gray-500">Delete?</span>
-                <button
-                  onClick={() => onDelete(item.id)}
-                  className="text-xs bg-highlight text-white px-1.5 py-0.5 rounded hover:opacity-90 transition-opacity"
-                  aria-label="Confirm delete"
-                >
-                  Confirm
-                </button>
-                <button
-                  onClick={() => setIsPendingDelete(false)}
-                  className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 transition-colors"
-                  aria-label="Cancel delete"
-                >
-                  Cancel
-                </button>
-              </span>
-            ) : (
-              <button
-                onClick={() => setIsPendingDelete(true)}
-                className="text-highlight hover:opacity-75 transition-opacity"
-                aria-label={`Delete ${item.title ?? 'item'}`}
-                title="Delete item"
-              >
-                <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
-              </button>
-            )}
+            <button
+              onClick={() => onDelete(item.id)}
+              className="text-highlight hover:opacity-75 transition-opacity"
+              style={{marginBottom:'5px'}}
+              aria-label={`Delete ${item.title ?? 'item'}`}
+              title="Delete item"
+            >
+              <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
+            </button>
           </div>
         </div>
       </div>
@@ -434,35 +411,16 @@ export default function ItemCard({
             {new Date(item.createdAt).toLocaleDateString()}
           </span>
 
-          {/* AC-067: Delete action with inline confirmation */}
-          {isPendingDelete ? (
-            <span className="flex items-center gap-1">
-              <span className="text-xs text-gray-500">Delete?</span>
-              <button
-                onClick={() => onDelete(item.id)}
-                className="text-xs bg-highlight text-white px-1.5 py-0.5 rounded hover:opacity-90 transition-opacity"
-                aria-label="Confirm delete"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setIsPendingDelete(false)}
-                className="text-xs text-gray-400 hover:text-gray-600 px-1.5 py-0.5 rounded border border-gray-300 transition-colors"
-                aria-label="Cancel delete"
-              >
-                Cancel
-              </button>
-            </span>
-          ) : (
-            <button
-              onClick={() => setIsPendingDelete(true)}
-              className="text-highlight hover:opacity-75 transition-opacity"
-              aria-label={`Delete ${item.title ?? 'item'}`}
-              title="Delete item"
-            >
-              <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
-            </button>
-          )}
+          {/* AC-067: Delete action */}
+          <button
+            onClick={() => onDelete(item.id)}
+            className="text-highlight hover:opacity-75 transition-opacity"
+            style={{marginBottom:'5px'}}
+            aria-label={`Delete ${item.title ?? 'item'}`}
+            title="Delete item"
+          >
+            <span className="material-symbols-outlined" style={{fontSize:'14px'}}>delete</span>
+          </button>
         </div>
       </div>
     </div>
