@@ -72,6 +72,14 @@ public interface ItemRepository extends JpaRepository<Item, Long> {
     @Query("UPDATE Item i SET i.categoryId = NULL WHERE i.userId = :userId AND i.categoryId = :categoryId")
     void reassignItemsToUncategorized(@Param("userId") Long userId, @Param("categoryId") Long categoryId);
 
+    /**
+     * AC-067: Deletes an item by ID scoped to the user, bypassing Hibernate entity lifecycle.
+     * Returns the number of rows deleted (0 if not found or not owned by user).
+     */
+    @Modifying
+    @Query("DELETE FROM Item i WHERE i.id = :itemId AND i.userId = :userId")
+    int deleteByItemIdAndUserId(@Param("itemId") Long itemId, @Param("userId") Long userId);
+
     // -------------------------------------------------------------------------
     // MOD-006: Auto-Cleanup queries
     // -------------------------------------------------------------------------

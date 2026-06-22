@@ -303,9 +303,10 @@ public class ItemService {
      */
     @Transactional
     public void deleteItem(Long userId, Long itemId) {
-        Item item = itemRepository.findByIdAndUserId(itemId, userId)
-                .orElseThrow(() -> new ItemNotFoundException("Item not found: " + itemId));
-        itemRepository.delete(item);
+        int deleted = itemRepository.deleteByItemIdAndUserId(itemId, userId);
+        if (deleted == 0) {
+            throw new ItemNotFoundException("Item not found: " + itemId);
+        }
         logger.info("Item deleted userId={} itemId={}", userId, itemId);
     }
 
